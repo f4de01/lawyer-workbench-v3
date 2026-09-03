@@ -1,0 +1,6 @@
+*.sh text eol=lf
+*.md text
+*.yaml text
+*.docx binary
+*.doc binary
+*.pdf binary
