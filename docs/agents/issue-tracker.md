@@ -1,6 +1,6 @@
 # Issue tracker: GitHub
 
-> **Hard boundary 1 applies here.** No real case material, client identifiers, or sensitive-term lists in issue titles, bodies, comments, or PRs. Case references point only at external paths under `D:\Claude\Cases\`.
+> **Hard boundary 1 applies here.** No real case material, client identifiers, or sensitive-term lists in issue titles, bodies, comments, or PRs. Case references point only at external paths under `D:\Claude\Data\Cases\`.
 
 
 Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
