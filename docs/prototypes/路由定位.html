@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>原型：路由的定位机制</title>
+<style>
+  :root { --ink:#1c1c1c; --muted:#6b6b6b; --line:#e3e0da; --bg:#faf9f7; --card:#fff; --accent:#8a3b12; --accent-bg:#fbf1ea; --ok:#2f6b3a; --ok-bg:#eaf4ec; --warn:#8a6d00; --warn-bg:#fbf5df; --dead:#777; --dead-bg:#eee; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",system-ui,sans-serif; color:var(--ink); background:var(--bg); line-height:1.55; font-size:14px; }
+  main { max-width:1280px; margin:0 auto; padding:28px 24px 80px; }
+  h1 { font-size:22px; margin:0 0 6px; }
+  h2 { font-size:15px; margin:0 0 10px; letter-spacing:.02em; }
+  h3 { font-size:13px; margin:14px 0 6px; color:var(--muted); font-weight:600; }
+  p { margin:6px 0; }
+  .intro { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px 18px; margin-bottom:18px; }
+  .intro ul { margin:6px 0 0 18px; padding:0; }
+  .intro li { margin:2px 0; }
+  .tag { display:inline-block; font-size:11px; padding:1px 7px; border-radius:10px; border:1px solid var(--line); color:var(--muted); background:#f4f2ee; margin-left:6px; vertical-align:middle; }
+  .grid { display:grid; grid-template-columns: 1fr 1fr; gap:18px; align-items:start; }
+  @media (max-width: 900px) { .grid { grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px 18px; }
+  .module { border-top:1px solid var(--line); padding:10px 0 4px; }
+  .module:first-of-type { border-top:none; }
+  .module-head { display:flex; align-items:center; gap:8px; }
+  .module-head b { font-size:14px; }
+  .node { display:grid; grid-template-columns: 1fr auto; gap:6px 12px; padding:7px 0 7px 12px; border-left:3px solid var(--line); margin:6px 0; }
+  .node.changed { border-left-color:var(--accent); background:var(--accent-bg); }
+  .node .t { font-weight:600; }
+  .node .m { color:var(--muted); font-size:12px; }
+  .badge { display:inline-block; font-size:11px; padding:1px 8px; border-radius:10px; margin-left:6px; vertical-align:middle; }
+  .s-未生成 { background:#f4f2ee; color:var(--muted); border:1px solid var(--line); }
+  .s-已生成 { background:var(--warn-bg); color:var(--warn); }
+  .s-已确认 { background:var(--ok-bg); color:var(--ok); }
+  .s-不适用 { background:var(--dead-bg); color:var(--dead); text-decoration:line-through; }
+  .from { font-size:11px; color:var(--muted); }
+  button { font:inherit; font-size:12.5px; padding:4px 10px; border:1px solid #cfcac2; background:#fff; border-radius:6px; cursor:pointer; color:var(--ink); }
+  button:hover { border-color:var(--accent); color:var(--accent); }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.primary:hover { color:#fff; opacity:.92; }
+  button.small { padding:2px 8px; font-size:12px; }
+  button.done { background:var(--ok-bg); border-color:#bfd8c4; color:var(--ok); }
+  button.now { outline:2px solid var(--accent); }
+  button:disabled { opacity:.45; cursor:default; }
+  .actions { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; align-content:start; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:6px 0; }
+  input[type=text] { font:inherit; padding:6px 10px; border:1px solid #cfcac2; border-radius:6px; min-width:260px; }
+  .ask { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 10px; }
+  .chips button { background:#f4f2ee; border-color:transparent; }
+  .answer { border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-top:8px; background:#fff; }
+  .three { display:grid; grid-template-columns: 90px 1fr; gap:6px 10px; }
+  .three .k { color:var(--muted); }
+  .three .v b { color:var(--accent); }
+  .forms { display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; margin-top:12px; }
+  @media (max-width: 900px) { .forms { grid-template-columns:1fr; } }
+  .form { border:1px solid var(--line); border-radius:8px; padding:10px 12px; background:#fcfbf9; }
+  .form h4 { margin:0 0 6px; font-size:12.5px; color:var(--muted); font-weight:600; }
+  .form pre { margin:0; white-space:pre-wrap; font-family:Consolas,"Cascadia Mono",monospace; font-size:12.5px; line-height:1.5; }
+  .form .cmd { font-family:Consolas,"Cascadia Mono",monospace; font-size:14px; color:var(--accent); background:var(--accent-bg); padding:6px 10px; border-radius:6px; display:inline-block; }
+  .form ul { margin:6px 0 0 16px; padding:0; font-size:12.5px; }
+  .trace { font-size:12px; color:var(--muted); margin-top:10px; border-top:1px dashed var(--line); padding-top:8px; }
+  .trace li { margin:1px 0; }
+  .tabs { display:flex; gap:4px; flex-wrap:wrap; border-bottom:1px solid var(--line); margin-bottom:12px; }
+  .tabs button { border:none; border-bottom:2px solid transparent; border-radius:0; background:none; padding:6px 10px; }
+  .tabs button.active { border-bottom-color:var(--accent); color:var(--accent); font-weight:600; }
+  .steps { display:flex; flex-direction:column; gap:6px; margin-top:10px; }
+  .steps button { text-align:left; padding:7px 12px; }
+  .scenario p { color:#333; }
+  .watch { background:var(--warn-bg); border-left:3px solid var(--warn); padding:6px 10px; margin:8px 0; font-size:13px; }
+  details { margin-top:10px; }
+  summary { cursor:pointer; color:var(--muted); font-size:13px; }
+  pre.json { font-family:Consolas,"Cascadia Mono",monospace; font-size:12px; background:#f6f4f0; padding:10px; border-radius:6px; overflow:auto; max-height:420px; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th, td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  .domain .node { border-left-color:#ddd; grid-template-columns:1fr auto; }
+  .note { color:var(--muted); font-size:12.5px; }
+  code { font-family:Consolas,"Cascadia Mono",monospace; font-size:12.5px; background:#f4f2ee; padding:0 4px; border-radius:4px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>原型：路由的定位机制 <span class="tag">一次性原型 · 不是产品代码</span></h1>
+<div class="intro">
+  <p><b>要回答的问题</b>：路由只读一张案件图（案件图里没有的按「领域」名去领域图找），能不能只靠<b>数组顺序 + 条目推出的状态</b>就回答「当前节点、上一完成、下一任务」三问？回答完之后，「帮助编排提示词」应该以什么<b>形式</b>给出，律师拿到就能用？</p>
+  <p><b>怎么玩</b>：左边是案件图，按钮就是律师会发起的动作（生成 / 确认 / 不适用 / 加节点）。右边是路由，输入一句话或点常用问法，看它怎么答。每次动作后路由自动重答。下方「带着走」是几段准备好的情形，专挑纸上想不清的地方。</p>
+  <p><b>原型里先假定的几件事</b>（都是待你反应的点，不是已定）：</p>
+  <ul>
+    <li>节点从领域图带入案件图时<b>沿用领域图里的 id</b>；律师自己加的节点拿新 id。路由靠 id 对应两张图，标题改了也不丢。</li>
+    <li>「当前节点」= 状态为<b>已生成、等律师确认</b>的节点，可以不止一个；一个都没有就是「没有待确认的文书」。</li>
+    <li>「上一完成」= 现在仍处于已确认状态的节点里，确认时间最晚的那个。已确认后重出的节点不再算「完成」。</li>
+    <li>「下一任务」先列<b>确认</b>（案件图里所有已生成的），再列<b>生成</b>一个节点：案件图里未生成的优先（那是律师自己加的），其次领域图里案件图还没有的。领域图里挑哪一个有两种策略，右上角可切换。</li>
+    <li>模块级不适用 = 把该模块在领域图里的全部节点带进案件图、逐个记不适用。图仍是唯一台账，路由不需要模块级标记。</li>
+    <li>编排 skill 的名字（/生成、/确认 之类）是<b>占位</b>，由「编排层与参考层的 skill 清单」票定；这里只定路由输出的形状。</li>
+  </ul>
+</div>
+
+<div class="grid">
+  <section class="card">
+    <h2>案件图 <span class="tag" id="graph-summary"></span></h2>
+    <div class="row">
+      <button class="small" onclick="重置('空图')">重置：空图起手</button>
+      <button class="small" onclick="重置('整份')">重置：整份领域图起手</button>
+      <span class="note">时钟：<span id="clock"></span></span>
+    </div>
+    <div id="graph"></div>
+    <h3>律师加一个领域图里没有的节点</h3>
+    <div class="row">
+      <input type="text" id="new-title" placeholder="节点标题，如：补充材料说明" style="min-width:200px">
+      <select id="new-module"></select>
+      <button class="small" onclick="加节点()">加进案件图</button>
+    </div>
+    <details><summary>查看 图.json（引擎实际写的东西）</summary><pre class="json" id="json"></pre></details>
+  </section>
+
+  <section class="card">
+    <h2>路由 <span class="tag">只读，不触发</span></h2>
+    <div class="ask">
+      <input type="text" id="prompt" placeholder="像跟同事说话一样问" value="现在到哪了">
+      <button class="primary" onclick="问路由()">问路由</button>
+      <label class="note" style="margin-left:auto">下一任务策略
+        <select id="strategy" onchange="问路由()">
+          <option value="最早未做">最早未做（按领域图顺序补空）</option>
+          <option value="当前之后">当前之后（顺着刚做的往下）</option>
+        </select>
+      </label>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div id="answer" class="answer"></div>
+  </section>
+</div>
+
+<section class="card" style="margin-top:18px">
+  <h2>带着走 <span class="tag">每个情形从固定起点开始，按顺序点</span></h2>
+  <div class="tabs" id="tabs"></div>
+  <div id="scenario"></div>
+</section>
+
+<div class="grid" style="margin-top:18px">
+  <section class="card domain">
+    <h2>领域图「破产」（缩小版，只读）<span class="tag">节点只有默认标题、空白模板、顺序</span></h2>
+    <div id="domain"></div>
+  </section>
+  <section class="card">
+    <h2>路由自持的编排 skill 清单 <span class="tag">名字占位</span></h2>
+    <p class="note">Claude Code 侧编排 skill 标了 <code>disable-model-invocation</code> 后不在模型可见列表里，路由必须自己持有这份清单（研究票结论）。路由只指向清单里真存在的入口（B7）。</p>
+    <table id="catalog"></table>
+    <details>
+      <summary>路由 SKILL.md 的「地图」部分会长什么样（照 ask-matt 写法的草稿）</summary>
+      <pre class="json" id="map-draft"></pre>
+    </details>
+  </section>
+</div>
+
+</main>
+
+<!-- ===================== 纯逻辑模块：不碰 DOM，可整体搬进真正的 skill ===================== -->
+<script id="纯逻辑">
+// ---------- 领域图：与案件图同格式，没有条目 ----------
+const 领域图 = {
+  "领域": "破产",
+  "模块": [
+    { "id": "m-接受指定", "标题": "接受指定与报备", "节点": [
+      { "id": "n-承诺书", "标题": "签收文书并提交承诺书、团队信息及工作计划", "空白模板": "1-1.管理人承诺书及团队人员.docx" },
+      { "id": "n-印章",   "标题": "刻制管理人印章并备案", "空白模板": "1-2.关于管理人印章备案的报告.docx" },
+      { "id": "n-账户",   "标题": "开立管理人银行账户并备案", "空白模板": "1-3.关于管理人银行账户备案的报告.docx" }
+    ]},
+    { "id": "m-债权审查", "标题": "债权通知与审查", "节点": [
+      { "id": "n-通知债权人", "标题": "发现并通知已知债权人", "空白模板": null },
+      { "id": "n-债权表",     "标题": "编制债权表与债权核查报告", "空白模板": null }
+    ]},
+    { "id": "m-确认债权", "标题": "申请确认债权", "节点": [
+      { "id": "n-无异议债权", "标题": "申请裁定确认无异议债权", "空白模板": "3-1.关于提请法院裁定确认无异议债权的报告.docx" },
+      { "id": "n-补充确认",   "标题": "申请裁定补充确认债权", "空白模板": "3-2.关于提请法院补充确认无异议债权的报告.docx" }
+    ]},
+    { "id": "m-自行和解", "标题": "自行和解", "节点": [
+      { "id": "n-和解协议", "标题": "债务人与全体债权人签订和解协议", "空白模板": "8-2.和解协议（自行和解）.docx" },
+      { "id": "n-认可和解", "标题": "申请裁定认可和解协议并终结破产程序", "空白模板": "8-1.关于提请法院裁定认可和解协议并终结破产的报告.docx" }
+    ]}
+  ]
+};
+
+// ---------- 路由自持的编排 skill 清单（名字占位，由 skill 清单票定） ----------
+const 清单 = [
+  { "名": "/初始化", "用途": "建案件工作区与起手图（空图 / 整份领域图 / 定制图）", "参数": "案件工作区路径" },
+  { "名": "/生成",   "用途": "为一个节点出一版文书及其审查报告，永不覆盖已有文件", "参数": "节点" },
+  { "名": "/确认",   "用途": "律师读审查报告后对一版文书拍板，节点完成；agent 永不代做", "参数": "节点" },
+  { "名": "/不适用", "用途": "宣告一个节点或整个模块在本案不走", "参数": "节点或模块" },
+  { "名": "/路由",   "用途": "本图。答三问、指向入口、帮编排提示词；只读，不触发任何 skill", "参数": "一句话" },
+  { "名": "/存档",   "用途": "图趋近完整时保存图存档（判据由图存档票定）", "参数": "无" }
+];
+
+// ---------- 引擎桩子：写案件图。真正的引擎归唯一一个参考 skill ----------
+const 引擎 = {
+  空图(领域) { return { "领域": 领域, "模块": [] }; },
+
+  整份(领域图) {
+    return { "领域": 领域图.领域, "模块": 领域图.模块.map(m => ({
+      id: m.id, 标题: m.标题, 节点: m.节点.map(n => ({ id: n.id, 标题: n.标题, 空白模板: n.空白模板, 条目: [] }))
+    })) };
+  },
+
+  状态(节点) {
+    if (!节点.条目 || 节点.条目.length === 0) return "未生成";
+    const 末 = 节点.条目[节点.条目.length - 1].动作;
+    return 末 === "生成" ? "已生成" : 末 === "确认" ? "已确认" : "不适用";
+  },
+
+  版本数(节点) { return (节点.条目 || []).filter(e => e.动作 === "生成").length; },
+
+  找节点(图, id) {
+    for (const m of 图.模块) for (const n of m.节点) if (n.id === id) return { 模块: m, 节点: n };
+    return null;
+  },
+
+  找模块(图, 模块id或标题) {
+    return 图.模块.find(m => m.id === 模块id或标题 || m.标题 === 模块id或标题) || null;
+  },
+
+  // 严格惰性：只建这一个节点；模块不存在就一并建，不带同模块其他节点。
+  // 插入位置：按领域图里的相对顺序放进已有的兄弟之间；律师自己加的节点位置不动。
+  取或建节点(案件图, 领域图, 领域节点id) {
+    const 已有 = this.找节点(案件图, 领域节点id);
+    if (已有) return { ...已有, 新建: false };
+    const 源 = this.找节点(领域图, 领域节点id);
+    if (!源) throw new Error("领域图里没有 " + 领域节点id);
+    let m = 案件图.模块.find(x => x.id === 源.模块.id);
+    if (!m) {
+      m = { id: 源.模块.id, 标题: 源.模块.标题, 节点: [] };
+      const 领域序 = 领域图.模块.map(x => x.id);
+      const 位置 = 案件图.模块.findIndex(x => 领域序.indexOf(x.id) > 领域序.indexOf(m.id));
+      位置 < 0 ? 案件图.模块.push(m) : 案件图.模块.splice(位置, 0, m);
+    }
+    const n = { id: 源.节点.id, 标题: 源.节点.标题, 空白模板: 源.节点.空白模板, 条目: [] };
+    const 节点序 = 源.模块.节点.map(x => x.id);
+    const 位置 = m.节点.findIndex(x => 节点序.indexOf(x.id) > 节点序.indexOf(n.id));
+    位置 < 0 ? m.节点.push(n) : m.节点.splice(位置, 0, n);
+    return { 模块: m, 节点: n, 新建: true };
+  },
+
+  生成(案件图, 领域图, 节点id, 时间, 来源 = "agent") {
+    const 命中 = this.找节点(案件图, 节点id) || this.取或建节点(案件图, 领域图, 节点id);
+    const n = 命中.节点;
+    if (this.状态(n) === "不适用") return { 拒绝: "「" + n.标题 + "」已宣告不适用，要生成先由律师撤回不适用（原型未做）。" };
+    const v = this.版本数(n) + 1;
+    n.条目.push({ 动作: "生成", 时间, 来源, 文书: "文书/" + n.标题 + "/v" + v + ".docx", 审查报告: "文书/" + n.标题 + "/v" + v + ".审查报告.md" });
+    return { 节点: n, 模块: 命中.模块, 版本: v, 新建: !!命中.新建 };
+  },
+
+  确认(案件图, 节点id, 时间) {
+    const 命中 = this.找节点(案件图, 节点id);
+    if (!命中) return { 拒绝: "案件图里没有这个节点，没有文书可确认。" };
+    const s = this.状态(命中.节点);
+    if (s !== "已生成") return { 拒绝: "「" + 命中.节点.标题 + "」当前是「" + s + "」，只有已生成的文书才能确认。" };
+    命中.节点.条目.push({ 动作: "确认", 时间, 来源: "律师" });
+    return { 节点: 命中.节点 };
+  },
+
+  不适用(案件图, 领域图, 节点id, 时间) {
+    const 命中 = this.找节点(案件图, 节点id) || this.取或建节点(案件图, 领域图, 节点id);
+    const s = this.状态(命中.节点);
+    if (s === "不适用") return { 拒绝: "已经是不适用了。" };
+    if (s === "已确认") return { 拒绝: "「" + 命中.节点.标题 + "」已确认完成，完成的节点不能再宣告不适用（原型的假定，待裁）。" };
+    命中.节点.条目.push({ 动作: "不适用", 时间, 来源: "律师" });
+    return { 节点: 命中.节点 };
+  },
+
+  // 模块级不适用 = 把领域图里该模块的全部节点带进案件图，逐个记不适用。
+  模块不适用(案件图, 领域图, 模块id, 时间) {
+    const 源 = 领域图.模块.find(m => m.id === 模块id);
+    const 本地 = 案件图.模块.find(m => m.id === 模块id);
+    const 节点ids = new Set([...(源 ? 源.节点.map(n => n.id) : []), ...(本地 ? 本地.节点.map(n => n.id) : [])]);
+    const 结果 = [];
+    for (const id of 节点ids) {
+      const r = this.不适用(案件图, 领域图, id, 时间);
+      if (!r.拒绝) 结果.push(r.节点.标题);
+    }
+    return { 已记不适用: 结果 };
+  },
+
+  新增节点(案件图, 模块id, 标题, 空白模板 = null) {
+    let m = 案件图.模块.find(x => x.id === 模块id);
+    if (!m) { const 源 = 领域图.模块.find(x => x.id === 模块id); m = { id: 模块id, 标题: 源 ? 源.标题 : 模块id, 节点: [] }; 案件图.模块.push(m); }
+    const n = { id: "n-律师-" + Math.random().toString(36).slice(2, 7), 标题, 空白模板, 条目: [] };
+    m.节点.push(n);
+    return { 节点: n, 模块: m };
+  },
+
+  改标题(案件图, 节点id, 新标题) {
+    const 命中 = this.找节点(案件图, 节点id);
+    if (命中) 命中.节点.标题 = 新标题;
+    return 命中;
+  }
+};
+
+// ---------- 路由：只读两张图 ----------
+const 路由 = {
+  // 三问
+  定位(案件图, 领域图, 选项 = {}) {
+    const 策略 = 选项.下一任务策略 || "最早未做";
+    const 痕迹 = [];
+    const 全部案件节点 = [];
+    for (const m of 案件图.模块) for (const n of m.节点) 全部案件节点.push({ 模块: m, 节点: n, 状态: 引擎.状态(n) });
+    痕迹.push("读案件图：" + 案件图.模块.length + " 个模块、" + 全部案件节点.length + " 个节点。");
+
+    const 当前节点 = 全部案件节点.filter(x => x.状态 === "已生成");
+
+    let 上一完成 = null;
+    for (const x of 全部案件节点) {
+      if (x.状态 !== "已确认") continue;
+      const 确认条 = [...x.节点.条目].reverse().find(e => e.动作 === "确认");
+      if (!上一完成 || 确认条.时间 > 上一完成.时间) 上一完成 = { 模块: x.模块, 节点: x.节点, 时间: 确认条.时间 };
+    }
+
+    const 下一任务 = [];
+    for (const x of 当前节点) 下一任务.push({ 动作: "确认", 模块: x.模块, 节点: x.节点, 来自: "案件图" });
+
+    // 候选：案件图里未生成的（律师自己加的、或整份起手图里还没动的）优先
+    const 案件未生成 = 全部案件节点.filter(x => x.状态 === "未生成");
+    const 案件ids = new Set(全部案件节点.map(x => x.节点.id));
+    const 领域候选 = [];
+    if (领域图 && 领域图.领域 === 案件图.领域) {
+      for (const m of 领域图.模块) for (const n of m.节点) if (!案件ids.has(n.id)) 领域候选.push({ 模块: m, 节点: n });
+      痕迹.push("案件图顶层「领域」=「" + 案件图.领域 + "」，按名字找到领域图；领域图里案件图还没有的节点 " + 领域候选.length + " 个。");
+    } else {
+      痕迹.push("找不到名为「" + 案件图.领域 + "」的领域图，只能按案件图回答。");
+    }
+
+    let 生成候选 = null, 候选来自 = null;
+    if (案件未生成.length) { 生成候选 = 案件未生成[0]; 候选来自 = "案件图"; 痕迹.push("案件图里有未生成的节点，先做它：「" + 生成候选.节点.标题 + "」。"); }
+    else if (领域候选.length) {
+      if (策略 === "最早未做") { 生成候选 = 领域候选[0]; 痕迹.push("策略「最早未做」：取领域图顺序里第一个案件图没有的节点。"); }
+      else {
+        // 当前之后：从最近动过的节点在领域图里的位置往后找
+        let 最近 = null;
+        for (const x of 全部案件节点) for (const e of x.节点.条目) if (!最近 || e.时间 > 最近.时间) 最近 = { id: x.节点.id, 时间: e.时间, 标题: x.节点.标题 };
+        const 领域序 = []; for (const m of 领域图.模块) for (const n of m.节点) 领域序.push(n.id);
+        const 起 = 最近 ? 领域序.indexOf(最近.id) : -1;
+        生成候选 = 领域候选.find(c => 领域序.indexOf(c.节点.id) > 起) || 领域候选[0];
+        痕迹.push("策略「当前之后」：最近动过的是「" + (最近 ? 最近.标题 : "无") + "」，往后找第一个案件图没有的" + (领域序.indexOf(生成候选.节点.id) > 起 ? "。" : "；后面没有了，绕回最早的。"));
+      }
+      候选来自 = "领域图";
+    }
+    if (生成候选) 下一任务.push({ 动作: "生成", 模块: 生成候选.模块, 节点: 生成候选.节点, 来自: 候选来自 });
+    else if (!当前节点.length) { 下一任务.push({ 动作: "存档", 来自: "路由" }); 痕迹.push("案件图与领域图里没有任何未生成、未确认的节点：图趋近完整。"); }
+
+    return { 当前节点, 上一完成, 下一任务, 痕迹 };
+  },
+
+  // 一句话 → 意图 + 三问 + 编排
+  问(案件图, 领域图, 提示词, 清单, 选项 = {}) {
+    const 定位 = this.定位(案件图, 领域图, 选项);
+    const 痕迹 = [...定位.痕迹];
+    const p = (提示词 || "").trim();
+
+    const 候选节点 = [];
+    for (const m of 案件图.模块) for (const n of m.节点) 候选节点.push({ 模块: m, 节点: n, 来自: "案件图" });
+    const 案件ids = new Set(候选节点.map(x => x.节点.id));
+    for (const m of 领域图.模块) for (const n of m.节点) if (!案件ids.has(n.id)) 候选节点.push({ 模块: m, 节点: n, 来自: "领域图" });
+    const 候选模块 = [...案件图.模块, ...领域图.模块.filter(m => !案件图.模块.some(x => x.id === m.id))];
+
+    const 最像节点 = 打分最高(p, 候选节点.map(x => ({ 项: x, 文本: x.节点.标题 })));
+    const 最像模块 = 打分最高(p, 候选模块.map(m => ({ 项: m, 文本: m.标题 })));
+
+    let 意图, 目标 = null, 说明 = [];
+    if (/不需要|不适用|不用|跳过|不走/.test(p) && (最像节点 || 最像模块)) {
+      if (最像模块 && (!最像节点 || 最像模块.分 >= 最像节点.分)) { 意图 = "模块不适用"; 目标 = { 模块: 最像模块.项 }; }
+      else { 意图 = "不适用"; 目标 = 最像节点.项; }
+    } else if (/确认|拍板|通过|签了/.test(p)) {
+      意图 = "确认";
+      const 已生成 = 定位.当前节点;
+      // 待确认的就那几份，一个二字片段对上就算点名了
+      const 点名 = 打分最高(p, 已生成.map(x => ({ 项: x, 文本: x.节点.标题 })), 1);
+      const 命中 = 点名 && 点名.项;
+      if (命中) 目标 = 命中;
+      else if (已生成.length === 1) { 目标 = 已生成[0]; 说明.push("你没点名，案件图里只有一份待确认的文书，就当是它。"); }
+      else if (已生成.length === 0) { 意图 = "定位"; 说明.push("现在没有任何已生成、待确认的文书，没什么可确认的。"); }
+      else { 意图 = "定位"; 说明.push("有 " + 已生成.length + " 份文书待确认，你要确认哪一份？"); }
+    } else if (最像节点 && 最像节点.分 >= 2 && !/到哪|进度|阶段|下一步|接下来|做什么|干什么|上一|状态/.test(p)) {
+      意图 = "生成"; 目标 = 最像节点.项;
+    } else {
+      意图 = "定位";
+      if (p && !/到哪|进度|阶段|下一步|接下来|做什么|干什么|上一|状态|现在/.test(p)) 说明.push("这句话没对上案件图或领域图里的任何节点。要做图里没有的事，先用清单里的入口把节点加进案件图（原型左下角可以加）。");
+    }
+    痕迹.push("意图：" + 意图 + (目标 ? "，目标：「" + (目标.节点 ? 目标.节点.标题 : 目标.模块.标题) + "」（" + (目标.来自 || "案件图") + "）" : ""));
+
+    let 编排;
+    if (意图 === "定位") {
+      const 首 = 定位.下一任务[0];
+      编排 = 首 ? this.编排(首.动作, 首, 清单, 定位) : null;
+      if (首) 痕迹.push("编排按「下一任务」的第一项给。");
+    } else if (意图 === "模块不适用") {
+      编排 = this.编排("模块不适用", 目标, 清单, 定位);
+    } else {
+      编排 = this.编排(意图, 目标, 清单, 定位);
+    }
+    return { 意图, 目标, 定位, 编排, 说明, 痕迹 };
+  },
+
+  // 编排：三种形式并列，供反应
+  编排(动作, 目标, 清单, 定位) {
+    const 入口 = (名) => 清单.find(s => s.名 === 名) || { 名: 名 + "（清单里没有！）" };
+    const n = 目标 && 目标.节点, m = 目标 && 目标.模块;
+    const 状态 = n && n.条目 ? 引擎.状态(n) : (目标 && 目标.来自 === "领域图" ? "未生成（案件图里还没有）" : "未生成");
+    const 版本 = n && n.条目 ? 引擎.版本数(n) : 0;
+
+    if (动作 === "生成") {
+      const s = 入口("/生成");
+      const 重出 = 状态 === "已确认" ? "这个节点已确认过，再生成是重出：新版本出来后节点回到已生成，旧的确认留在历史里。" : 状态 === "已生成" ? "已有一版待确认，再生成会出 v" + (版本 + 1) + "，旧版不覆盖。" : null;
+      const 建节点 = 目标.来自 === "领域图" ? "案件图里还没有这个节点，生成时引擎会按领域图把它建进模块「" + m.标题 + "」，只建这一个。" : null;
+      return {
+        一行: s.名 + " " + n.标题,
+        段落: [
+          "调用 " + s.名 + "。",
+          "节点：" + n.标题 + "（模块：" + m.标题 + "）。",
+          "空白模板：" + (n.空白模板 || "无官方模板，从材料或过往文书反推。"),
+          版本 ? "过往版本：v1–v" + 版本 + "，本次出 v" + (版本 + 1) + "。" : "本次出 v1。",
+          "产出：一版文书 + 一份审查报告，一起落盘；不覆盖已有文件。"
+        ].join("\n"),
+        人话: "接下来该出「" + n.标题 + "」了。打 " + s.名 + " " + n.标题 + " 就行；出来之后读审查报告，再决定确认还是再出一版。",
+        用到: [n.空白模板 ? "空白模板：" + n.空白模板 : "无官方模板（按需反推）", "案件工作区里的材料", 版本 ? "过往版本 v" + 版本 : null].filter(Boolean),
+        决策点: ["读审查报告：通过就确认，不通过就再出一版或自己改一版兜底"],
+        提醒: [建节点, 重出].filter(Boolean)
+      };
+    }
+    if (动作 === "确认") {
+      const s = 入口("/确认");
+      return {
+        一行: s.名 + " " + n.标题,
+        段落: ["调用 " + s.名 + "。", "节点：" + n.标题 + "（模块：" + m.标题 + "）。", "对象：v" + 版本 + " 及其审查报告。", "效果：确认即完成；agent 不代做。"].join("\n"),
+        人话: "「" + n.标题 + "」的 v" + 版本 + " 在等你拍板。审查报告看过没问题，就打 " + s.名 + " " + n.标题 + "。",
+        用到: ["v" + 版本 + " 的审查报告"],
+        决策点: ["这一版能不能直接交：能就确认，不能就说要改哪里再出一版"],
+        提醒: []
+      };
+    }
+    if (动作 === "不适用") {
+      const s = 入口("/不适用");
+      return {
+        一行: s.名 + " " + n.标题,
+        段落: ["调用 " + s.名 + "。", "节点：" + n.标题 + "（模块：" + m.标题 + "）。", "效果：节点进入终态；没有删除。"].join("\n"),
+        人话: "本案不走「" + n.标题 + "」的话，打 " + s.名 + " " + n.标题 + "。以后路由就不再提它。",
+        用到: [], 决策点: ["这是你的裁定，路由不替你判断该不该走"], 提醒: 目标.来自 === "领域图" ? ["案件图里还没有这个节点，引擎会先把它建进来再记不适用，好让台账留痕。"] : []
+      };
+    }
+    if (动作 === "模块不适用") {
+      const s = 入口("/不适用");
+      const mm = 目标.模块;
+      return {
+        一行: s.名 + " 模块 " + mm.标题,
+        段落: ["调用 " + s.名 + "。", "模块：" + mm.标题 + "。", "效果：该模块在领域图里的全部节点带进案件图，逐个记不适用；已确认的不动。"].join("\n"),
+        人话: "本案不走「" + mm.标题 + "」这一整块的话，打 " + s.名 + " 模块 " + mm.标题 + "。",
+        用到: [], 决策点: ["整块不走是你的裁定"], 提醒: []
+      };
+    }
+    if (动作 === "存档") {
+      const s = 入口("/存档");
+      return { 一行: s.名, 段落: "调用 " + s.名 + "。图里没有未生成、未确认的节点了。", 人话: "图趋近完整了。打 " + s.名 + " 保存图存档。", 用到: [], 决策点: ["「趋近完整」的判据由图存档票定，这里只是占位"], 提醒: [] };
+    }
+    return null;
+  }
+};
+
+// 粗糙的标题匹配：数标题的二字片段有几个出现在提示词里
+function 打分最高(提示词, 项们, 最低 = 2) {
+  if (!提示词) return null;
+  let 最好 = null;
+  for (const { 项, 文本 } of 项们) {
+    const 净 = 文本.replace(/[（）()、，,。]/g, "");
+    let 分 = 0;
+    for (let i = 0; i + 2 <= 净.length; i++) if (提示词.includes(净.slice(i, i + 2))) 分++;
+    if (提示词.includes(净)) 分 += 10;
+    if (分 > 0 && (!最好 || 分 > 最好.分)) 最好 = { 项, 分 };
+  }
+  return 最好 && 最好.分 >= 最低 ? 最好 : null;
+}
+</script>
+
+<!-- ===================== 页面外壳：一次性 ===================== -->
+<script>
+let 案件图, 步 = 0, 上次提示 = "现在到哪了", 刚变 = new Set(), 当前情形 = 0, 情形步 = 0;
+const 时间 = () => "2026-09-04 " + String(9 + Math.floor(步 / 60)).padStart(2, "0") + ":" + String(步 % 60).padStart(2, "0");
+const 走一步 = () => { 步 += 7; return 时间(); };
+
+function 重置(方式) {
+  案件图 = 方式 === "整份" ? 引擎.整份(领域图) : 引擎.空图("破产");
+  步 = 0; 刚变 = new Set(); 情形步 = 0;
+  渲染();
+}
+
+function 动作(fn) {
+  刚变 = new Set();
+  const r = fn(走一步());
+  if (r && r.拒绝) alert("引擎拒绝：" + r.拒绝);
+  else if (r && r.节点) 刚变.add(r.节点.id);
+  渲染();
+}
+const 做 = {
+  生成: id => 动作(t => 引擎.生成(案件图, 领域图, id, t)),
+  兜底: id => 动作(t => 引擎.生成(案件图, 领域图, id, t, "律师")),
+  确认: id => 动作(t => 引擎.确认(案件图, id, t)),
+  不适用: id => 动作(t => 引擎.不适用(案件图, 领域图, id, t)),
+  模块不适用: id => 动作(t => 引擎.模块不适用(案件图, 领域图, id, t)),
+  改标题: id => { const 命中 = 引擎.找节点(案件图, id); const 新 = prompt("新标题", 命中.节点.标题); if (新) { 引擎.改标题(案件图, id, 新); 刚变 = new Set([id]); 渲染(); } }
+};
+function 加节点() {
+  const 标题 = document.getElementById("new-title").value.trim(); if (!标题) return;
+  const r = 引擎.新增节点(案件图, document.getElementById("new-module").value, 标题);
+  document.getElementById("new-title").value = ""; 刚变 = new Set([r.节点.id]); 渲染();
+}
+function 问路由() { 上次提示 = document.getElementById("prompt").value; 渲染答案(); }
+function 问(文) { document.getElementById("prompt").value = 文; 问路由(); }
+
+function 渲染() {
+  const g = document.getElementById("graph");
+  document.getElementById("clock").textContent = 时间();
+  if (!案件图.模块.length) g.innerHTML = '<p class="note">空图：顶层只有「领域：' + 案件图.领域 + '」，一个模块也没有。路由会去领域图找。</p>';
+  else g.innerHTML = 案件图.模块.map(m => `
+    <div class="module">
+      <div class="module-head"><b>${m.标题}</b><span class="note">${m.节点.length} 个节点</span>
+        <button class="small" style="margin-left:auto" onclick="做.模块不适用('${m.id}')">整个模块不适用</button></div>
+      ${m.节点.map(n => { const s = 引擎.状态(n), v = 引擎.版本数(n), 领域有 = !!引擎.找节点(领域图, n.id); return `
+      <div class="node ${刚变.has(n.id) ? "changed" : ""}">
+        <div><span class="t">${n.标题}</span><span class="badge s-${s}">${s}</span>
+          <div class="m">${n.空白模板 ? "空白模板：" + n.空白模板 : "无空白模板"} · ${v ? "v" + v : "无版本"} · ${n.条目.length} 条条目 · <span class="from">${领域有 ? "来自领域图" : "律师自加"}</span></div></div>
+        <div class="actions">
+          <button class="small" onclick="做.生成('${n.id}')" ${s === "不适用" ? "disabled" : ""}>${s === "已确认" ? "重出" : "生成"}</button>
+          <button class="small" onclick="做.兜底('${n.id}')" ${s === "不适用" ? "disabled" : ""} title="律师自己写了一份，agent 登记">兜底</button>
+          <button class="small" onclick="做.确认('${n.id}')" ${s !== "已生成" ? "disabled" : ""}>确认</button>
+          <button class="small" onclick="做.不适用('${n.id}')" ${s === "不适用" || s === "已确认" ? "disabled" : ""}>不适用</button>
+          <button class="small" onclick="做.改标题('${n.id}')">改标题</button>
+        </div>
+      </div>`; }).join("")}
+    </div>`).join("");
+  const 计 = { 未生成: 0, 已生成: 0, 已确认: 0, 不适用: 0 };
+  for (const m of 案件图.模块) for (const n of m.节点) 计[引擎.状态(n)]++;
+  document.getElementById("graph-summary").textContent = Object.entries(计).map(([k, v]) => k + " " + v).join(" · ");
+  document.getElementById("json").textContent = JSON.stringify(案件图, null, 2);
+  const sel = document.getElementById("new-module");
+  const 模块们 = [...案件图.模块, ...领域图.模块.filter(m => !案件图.模块.some(x => x.id === m.id))];
+  sel.innerHTML = 模块们.map(m => `<option value="${m.id}">${m.标题}${案件图.模块.some(x => x.id === m.id) ? "" : "（案件图里还没有）"}</option>`).join("");
+  渲染答案();
+  渲染情形();
+}
+
+function 渲染答案() {
+  const 策略 = document.getElementById("strategy").value;
+  const r = 路由.问(案件图, 领域图, 上次提示, 清单, { 下一任务策略: 策略 });
+  const d = r.定位;
+  const 名 = x => x.节点 ? `<b>${x.节点.标题}</b><span class="note">（${x.模块.标题}）</span>` : "";
+  const 当前 = d.当前节点.length ? d.当前节点.map(x => 名(x) + " v" + 引擎.版本数(x.节点) + " 待确认").join("<br>") : "<span class='note'>没有待确认的文书</span>";
+  const 上一 = d.上一完成 ? 名(d.上一完成) + " <span class='note'>确认于 " + d.上一完成.时间 + "</span>" : "<span class='note'>还没有完成的节点</span>";
+  const 下一 = d.下一任务.map((t, i) => (i + 1) + ". " + t.动作 + " " + (t.节点 ? 名(t) : "") + " <span class='from'>· " + t.来自 + "</span>").join("<br>");
+  const e = r.编排;
+  const 形式 = e ? `
+    <div class="forms">
+      <div class="form"><h4>形式 A · 一行可复制</h4><span class="cmd">${e.一行}</span>
+        ${e.用到.length ? "<ul>" + e.用到.map(x => "<li>用到：" + x + "</li>").join("") + "</ul>" : ""}
+        <ul>${e.决策点.map(x => "<li>你要拍板：" + x + "</li>").join("")}</ul></div>
+      <div class="form"><h4>形式 B · 填好的提示词段落</h4><pre>${e.段落}</pre></div>
+      <div class="form"><h4>形式 C · 只说人话</h4><p style="margin:0">${e.人话}</p></div>
+    </div>
+    ${e.提醒.length ? e.提醒.map(x => `<div class="watch">${x}</div>`).join("") : ""}` : "";
+  document.getElementById("answer").innerHTML = `
+    <p class="note">你问：「${上次提示}」 → 路由判断这是「${r.意图}」${r.目标 ? "，说的是「" + (r.目标.节点 ? r.目标.节点.标题 : r.目标.模块.标题) + "」" : ""}</p>
+    ${r.说明.map(x => `<div class="watch">${x}</div>`).join("")}
+    <div class="three">
+      <div class="k">当前节点</div><div class="v">${当前}</div>
+      <div class="k">上一完成</div><div class="v">${上一}</div>
+      <div class="k">下一任务</div><div class="v">${下一}</div>
+    </div>
+    <h3>帮你编排（三种形式并列，看哪种顺手）</h3>
+    ${形式}
+    <div class="trace"><b>路由是怎么想的</b><ul style="margin:4px 0 0 16px;padding:0">${r.痕迹.map(x => "<li>" + x + "</li>").join("")}</ul></div>`;
+}
+
+// ---------- 带着走 ----------
+const 情形 = [
+  { 名: "① 空图起手", 说: "案件刚初始化，选了「空图」。图里一个节点都没有，路由只能靠领域图回答。看：三问在空图上怎么答，第一次生成之后案件图长出什么。",
+    看: "第一次生成后，案件图里只有一个模块、一个节点，同模块其他节点没被带进来（严格惰性）。",
+    起: "空图", 步骤: [
+      ["问：现在到哪了", () => 问("现在到哪了")],
+      ["生成 承诺书（路由推荐的第一个）", () => 做.生成("n-承诺书")],
+      ["问：下一步做什么", () => 问("下一步做什么")],
+      ["确认 承诺书", () => 做.确认("n-承诺书")],
+      ["问：现在到哪了", () => 问("现在到哪了")]
+    ] },
+  { 名: "② 两份同时在等确认", 说: "印章备案和银行账户备案常常一起出。两份都生成了、都没确认。看：「当前节点」是不是允许有两个，「下一任务」怎么排。",
+    看: "「当前节点」是复数。下一任务先列两个确认，再列一个生成。你说「确认」不点名，路由会追问。",
+    起: "空图", 步骤: [
+      ["生成 承诺书", () => 做.生成("n-承诺书")], ["确认 承诺书", () => 做.确认("n-承诺书")],
+      ["生成 印章备案", () => 做.生成("n-印章")], ["生成 银行账户备案", () => 做.生成("n-账户")],
+      ["问：现在到哪了", () => 问("现在到哪了")],
+      ["问：确认（不点名）", () => 问("确认")],
+      ["问：账户那份确认", () => 问("账户那份确认")]
+    ] },
+  { 名: "③ 跳着走", 说: "模块一还没做完，律师直接说「出债权表」。看：路由能不能在领域图里找到它、生成后案件图长成什么样、然后「下一任务」是回头补最早没做的，还是顺着债权表往下。切右上角的策略对比。",
+    看: "两种策略给出不同的下一任务：「最早未做」回到印章备案，「当前之后」去申请确认无异议债权。哪个更像律师的直觉？",
+    起: "空图", 步骤: [
+      ["生成 承诺书", () => 做.生成("n-承诺书")], ["确认 承诺书", () => 做.确认("n-承诺书")],
+      ["问：出债权表", () => 问("出债权表")],
+      ["生成 债权表（照路由说的）", () => 做.生成("n-债权表")],
+      ["确认 债权表", () => 做.确认("n-债权表")],
+      ["问：接下来做什么（试试切换策略）", () => 问("接下来做什么")]
+    ] },
+  { 名: "④ 整块不走", 说: "本案不会自行和解。律师一句「自行和解不需要」。看：路由怎么把这句话认成模块级不适用，引擎怎么把整块记进台账，之后路由是否再也不提它。",
+    看: "两个和解节点被带进案件图、都记了不适用；图仍是唯一台账。全部做完后下一任务变成「存档」。",
+    起: "整份", 步骤: [
+      ["问：自行和解不需要", () => 问("自行和解不需要")],
+      ["整个模块不适用（照路由说的）", () => 做.模块不适用("m-自行和解")],
+      ["问：现在到哪了", () => 问("现在到哪了")],
+      ["其余节点全部生成并确认（快进）", () => { for (const m of 案件图.模块) for (const n of m.节点) if (引擎.状态(n) === "未生成") { 引擎.生成(案件图, 领域图, n.id, 走一步()); 引擎.确认(案件图, n.id, 走一步()); } 渲染(); }],
+      ["问：现在到哪了", () => 问("现在到哪了")]
+    ] },
+  { 名: "⑤ 已确认后重出", 说: "承诺书确认过了，法院要求改一版。看：重出后节点回到已生成、旧确认留在历史；「上一完成」还算不算承诺书？",
+    看: "重出后「上一完成」不再是承诺书（它现在是已生成，不算完成），退回到印章备案。这个取法对不对？另一种取法是「最近一次确认动作」，那样上一完成仍是承诺书。",
+    起: "空图", 步骤: [
+      ["生成 承诺书", () => 做.生成("n-承诺书")], ["确认 承诺书", () => 做.确认("n-承诺书")],
+      ["生成 印章备案", () => 做.生成("n-印章")], ["确认 印章备案", () => 做.确认("n-印章")],
+      ["问：承诺书重新出一版", () => 问("承诺书重新出一版")],
+      ["重出 承诺书（照路由说的）", () => 做.生成("n-承诺书")],
+      ["问：现在到哪了", () => 问("现在到哪了")]
+    ] },
+  { 名: "⑥ 律师自己加的节点 + 改标题", 说: "律师在模块一加了一个领域图里没有的节点，又把承诺书改了个短标题。看：自加节点在「下一任务」里排在哪，改了标题的节点路由还认不认。",
+    看: "案件图里未生成的自加节点排在领域图候选之前。改标题后路由靠 id 仍把它当承诺书那个节点（「承诺书确认」能对上）；但律师说旧标题里的词就对不上了，因为对话只按现在的标题匹配。这是不是可接受的代价？",
+    起: "空图", 步骤: [
+      ["生成 承诺书", () => 做.生成("n-承诺书")],
+      ["加节点：补充材料说明（模块一）", () => { 引擎.新增节点(案件图, "m-接受指定", "补充材料说明"); 渲染(); }],
+      ["问：现在到哪了", () => 问("现在到哪了")],
+      ["承诺书改标题为「承诺书」", () => { 引擎.改标题(案件图, "n-承诺书", "承诺书"); 渲染(); }],
+      ["问：承诺书确认", () => 问("承诺书确认")],
+      ["问：出团队信息（旧标题里的词）", () => 问("出团队信息")]
+    ] },
+  { 名: "⑦ 问了图里没有的事", 说: "律师说「写一份给法院的情况说明」。领域图和案件图都没有这个节点。看：路由不能编造入口（B7），它该怎么答。",
+    看: "路由不猜、不造节点，只说没对上，并指向加节点的入口；然后照常回答三问。",
+    起: "空图", 步骤: [
+      ["生成 承诺书", () => 做.生成("n-承诺书")],
+      ["问：写一份给法院的情况说明", () => 问("写一份给法院的情况说明")],
+      ["加节点：给法院的情况说明（模块一）", () => { 引擎.新增节点(案件图, "m-接受指定", "给法院的情况说明"); 渲染(); }],
+      ["问：写一份给法院的情况说明", () => 问("写一份给法院的情况说明")]
+    ] }
+];
+
+function 选情形(i) { 当前情形 = i; 情形步 = 0; 重置(情形[i].起); }
+function 跑步骤(k) { 情形[当前情形].步骤[k][1](); 情形步 = k + 1; 渲染情形(); }
+function 渲染情形() {
+  document.getElementById("tabs").innerHTML = 情形.map((s, i) => `<button class="${i === 当前情形 ? "active" : ""}" onclick="选情形(${i})">${s.名}</button>`).join("");
+  const s = 情形[当前情形];
+  document.getElementById("scenario").innerHTML = `
+    <div class="scenario"><p>${s.说}</p><div class="watch">看点：${s.看}</div>
+      <div class="row"><button class="small" onclick="选情形(${当前情形})">从头开始（重置为${s.起 === "整份" ? "整份领域图起手" : "空图"}）</button></div>
+      <div class="steps">${s.步骤.map((st, k) => `<button class="${k < 情形步 ? "done" : k === 情形步 ? "now" : ""}" onclick="跑步骤(${k})">${k + 1}. ${st[0]}</button>`).join("")}</div>
+    </div>`;
+}
+
+// ---------- 静态区 ----------
+document.getElementById("domain").innerHTML = 领域图.模块.map(m => `
+  <div class="module"><div class="module-head"><b>${m.标题}</b></div>
+  ${m.节点.map(n => `<div class="node"><div><span class="t">${n.标题}</span><div class="m">${n.空白模板 ? "空白模板：" + n.空白模板 : "无官方模板"} · id ${n.id}</div></div><div></div></div>`).join("")}</div>`).join("");
+document.getElementById("catalog").innerHTML = "<tr><th>入口</th><th>用途</th><th>参数</th></tr>" + 清单.map(s => `<tr><td><code>${s.名}</code></td><td>${s.用途}</td><td>${s.参数}</td></tr>`).join("");
+document.getElementById("chips").innerHTML = ["现在到哪了", "下一步做什么", "出债权表", "印章备案不需要", "确认", "自行和解不需要", "承诺书重新出一版"].map(x => `<button class="small" onclick="问('${x}')">${x}</button>`).join("");
+document.getElementById("map-draft").textContent = `---
+name: 路由        （占位）
+description: 问案件到哪了、接下来做什么、该用哪个入口。只读的地图，不触发任何 skill。
+disable-model-invocation: true
+---
+
+# 路由
+
+你不必记住每个入口，问就行。
+
+## 主线：一个节点怎么走完
+
+1. /初始化 —— 建案件工作区与起手图，一案一次。
+2. /生成 <节点> —— 出一版文书 + 审查报告。案件图里没有的节点按领域图建，只建这一个。
+3. 读审查报告，然后二选一：
+   - /确认 <节点> —— 拍板，节点完成。只有你能做。
+   - 再 /生成 一次，或自己改一版兜底（一句话，agent 登记为已生成）。
+4. 不走的节点或整块：/不适用 <节点|模块>。没有删除。
+5. 图趋近完整：/存档。
+
+## 我怎么答「到哪了」
+
+先读案件图，再按顶层「领域」名读领域图。
+- 当前节点 = 已生成、等你确认的（可能不止一个）
+- 上一完成 = 仍处于已确认的节点里，确认最晚的
+- 下一任务 = 先确认，再生成一个：案件图里未生成的优先，其次领域图里案件图还没有的
+
+## 我不做的事
+
+不触发 skill，不写图，不替你判断该不该走某个节点。
+你说的事在图里对不上的，我说对不上，不编入口。`;
+
+// ---------- 起步 ----------
+选情形(0);
+</script>
+</body>
+</html>
