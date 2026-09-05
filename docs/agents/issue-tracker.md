@@ -1,6 +1,6 @@
 # Issue tracker: GitHub
 
-> **Hard boundary 1 applies here.** No real case material, client identifiers, or sensitive-term lists in issue titles, bodies, comments, or PRs. Case references point only at external paths under `D:\Claude\Data\Cases\`.
+> **Hard boundary 1 applies here.** No real case material, client identifiers, or sensitive-term lists in issue titles, bodies, comments, or PRs. Case references point only at external paths under `D:\Claude\Data\Cases\` (the root only, never a directory beneath it). Before `gh issue create` / `gh issue comment`, pipe the body through `scripts/privacy-check.py --stdin` (ADR-0014; until that script lands, self-check against the same five patterns: court case numbers, paths beneath the Cases root, mobile numbers, ID numbers, unified social credit codes).
 
 
 Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
