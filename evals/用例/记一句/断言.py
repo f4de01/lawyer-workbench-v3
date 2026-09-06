@@ -58,4 +58,4 @@ def check_图没动_收件箱没建(workspace, reply):
     data = json.loads((workspace / "图.json").read_text(encoding="utf-8"))
     assert all(n["条目"] == [] for m in data["模块"] for n in m["节点"]), "落档不该写条目"
     names = sorted(p.name for p in workspace.iterdir() if not _is_harness_noise(p.name))
-    assert names == ["AGENTS.md", "CLAUDE.md", "图.json", "图视图.json", "图视图.md", "材料"], "工作区里多出了东西：%s" % names
+    assert names == ["AGENTS.md", "CLAUDE.md", "图.json", "图视图.json", "图视图.md", "指南", "收件箱", "文书", "材料", "模板"], "工作区里多出了东西：%s" % names

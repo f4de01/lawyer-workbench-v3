@@ -17,6 +17,7 @@
     "./skills/loo0ng-domain",
     "./skills/loo0ng-filing",
     "./skills/loo0ng-graph",
+    "./skills/loo0ng-setup-case",
     "./skills/loo0ng-to-docx"
   ]
 }
