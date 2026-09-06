@@ -87,6 +87,8 @@ python scripts/gen-openai-yaml.py --check
 for d in tests/*/; do python -m unittest discover -s "$d" -p 'test_*.py' || exit 1; done
 ```
 
+`tests/loo0ng-to-docx/` 要 Word COM，缺了 fail 不 skip（ADR-0006、ADR-0015）：`test_gate.py` 每件门禁起一次 Word（约 7 秒，16 例约两分钟）；`test_templates.py` 是 19 件官方模板各出一份占位件过门禁的回归，约一分半，只在开发侧跑，不进 Codex 的 30 秒 shell。别在门禁测试跑的同时另起 Word 出件，两件门禁同时跑会互相关掉对方的实例。
+
 skill 层 eval：一个跑器两个后端，用例与种子在 `evals/`（ADR-0015，#25）：
 
 ```bash
@@ -97,7 +99,7 @@ python scripts/skill-eval.py --harness codex --runs 3         # 怀疑抖动时�
 python scripts/skill-eval.py --harness claude --evals evals/自检   # 跑器自检用例（故意失败），不进门槛
 ```
 
-其他参数：`--max-turns N`、`--timeout 秒` 覆盖用例里的值；`--keep` 跑完不删工作区，只为排障。退出码 0 全绿、1 有红、2 用法或用例配置错。结果只打印不进仓库。从 Claude Code 会话内跑 `--harness claude` 不用自己去环境变量：跑器已去掉 `CLAUDECODE` 两项并带上 `MSYS_NO_PATHCONV=1`。
+Codex 侧提示词经 stdin 送入（`PROMPT` 位置是 `-`）：PATH 上的 `codex` 是 npm 的 `.cmd` 垫片，cmd.exe 会把参数里第一个换行之后的字吞掉，多行提示词（如带一段稿子的「出一版」用例）只剩第一行（#28）。其他参数：`--max-turns N`、`--timeout 秒` 覆盖用例里的值；`--keep` 跑完不删工作区，只为排障。退出码 0 全绿、1 有红、2 用法或用例配置错。结果只打印不进仓库。从 Claude Code 会话内跑 `--harness claude` 不用自己去环境变量：跑器已去掉 `CLAUDECODE` 两项并带上 `MSYS_NO_PATHCONV=1`。
 
 ### `evals/` 目录
 
@@ -123,7 +125,8 @@ ADR-0015「目录名保持 ASCII」只指 `tests/`、`evals/` 两个顶层；其
 | `回复正则` | 对最后一条回复做 `re.search`，可空；报红时断言名是「回复正则」 |
 | `回合上限` | Claude Code 侧交给 `--max-turns`；Codex 侧数 JSONL 流里工具类 item（命令、改文件、MCP、搜索），超了杀进程树。默认 30 |
 | `超时秒` | 单次调用的墙钟上限，超了杀进程树。默认 300 |
-| `允许工具` | Claude Code 侧 `--allowedTools` 的列表（如 `["Bash(python *)"]`）；权限模式固定 acceptEdits。Codex 侧沙箱 workspace-write，不需要 |
+| `允许工具` | Claude Code 侧 `--allowedTools` 的列表（如 `["Bash(python *)"]`）；权限模式固定 acceptEdits。Codex 侧靠沙箱，不需要 |
+| `Codex沙箱` | Codex 侧 `codex exec -s` 的值：`workspace-write`（默认）或 `danger-full-access`。沙箱里起不来 Word COM（0x80070520 登录会话不存在）、`python` 也不在沙箱 PATH 上，所以要跑门禁的用例用后者（#28）。Claude Code 侧不看这个键 |
 | `说明` | 一句话，含用例的局限；带 skill 时必填，写明替身提示词的局限 |
 
 每次运行：在 `%TEMP%` 下建临时工作区 → 回放种子 → 调 harness（cwd 即工作区）→ 回复正则 → 逐条断言 → 删工作区（超时、超回合、断言抛错都删）。断言报红时给出函数名与 assert 的消息。

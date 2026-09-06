@@ -118,6 +118,16 @@ class LoadCaseTest(unittest.TestCase):
             skill_eval.load_case(d)
         self.assertIn("回复正则表达式", str(cm.exception))
 
+    def test_codex_sandbox_defaults_and_validates(self):
+        d = make_case(self.root, "默认沙箱")
+        self.assertEqual(skill_eval.load_case(d).codex_sandbox, "workspace-write")
+        d = make_case(self.root, "全权", Codex沙箱="danger-full-access")
+        self.assertEqual(skill_eval.load_case(d).codex_sandbox, "danger-full-access")
+        d = make_case(self.root, "错沙箱", Codex沙箱="read-only")
+        with self.assertRaises(skill_eval.EvalError) as cm:
+            skill_eval.load_case(d)
+        self.assertIn("Codex沙箱", str(cm.exception))
+
     def test_missing_required_key_is_an_error(self):
         d = self.root / "缺键"
         write(d, "提示词.md", "p")
@@ -206,7 +216,17 @@ class PromptAndCommandTest(unittest.TestCase):
         self.assertIn("--skip-git-repo-check", cmd)
         self.assertEqual(cmd[cmd.index("-C") + 1], str(ws))
         self.assertEqual(cmd[cmd.index("-o") + 1], str(last))
-        self.assertEqual(cmd[-1], "提示")
+        self.assertEqual(cmd[-1], "-", "提示词走 stdin，PROMPT 位置是 -")
+        self.assertNotIn("提示", cmd)
+        self.assertEqual(cmd[cmd.index("-s") + 1], "workspace-write")
+
+    def test_codex_command_takes_the_case_sandbox(self):
+        cmd = skill_eval.build_command("codex", ["codex.cmd"], "提示", self.root / "ws", max_turns=7,
+                                      last_path=self.root / "last.md", allowed_tools=[], codex_sandbox="danger-full-access")
+        self.assertEqual(cmd[cmd.index("-s") + 1], "danger-full-access")
+        claude = skill_eval.build_command("claude", ["claude.cmd"], "提示", self.root / "ws", max_turns=7,
+                                          last_path=self.root / "last.md", allowed_tools=[], codex_sandbox="danger-full-access")
+        self.assertNotIn("danger-full-access", claude, "Claude Code 侧不受这个键影响")
 
     def test_env_strips_nested_claude_and_disables_msys_pathconv(self):
         env = skill_eval.harness_env({"CLAUDECODE": "1", "CLAUDE_CODE_ENTRYPOINT": "cli", "PATH": "x"})
@@ -382,9 +402,10 @@ FAKE_CLAUDE = textwrap.dedent('''
 FAKE_CODEX = textwrap.dedent('''
     import json, pathlib, sys, time
     args = sys.argv[1:]
-    prompt = args[-1]
+    prompt = sys.stdin.read() if args[-1] == "-" else args[-1]  # 真 codex：PROMPT 为 "-" 时从 stdin 读
     ws = pathlib.Path(args[args.index("-C") + 1])
     last = pathlib.Path(args[args.index("-o") + 1])
+    (ws / "收到的提示词.txt").write_text(prompt, encoding="utf-8")
     def emit(o):
         print(json.dumps(o, ensure_ascii=False), flush=True)
     emit({"type": "thread.started", "thread_id": "t"})
@@ -453,9 +474,16 @@ class RealInvokeWithFakeBinariesTest(unittest.TestCase):
         self.assertEqual(inv.status, "ok", inv.detail)
         self.assertEqual(inv.reply, "已写入冒烟.txt。")
         self.assertEqual(inv.turns, 1)
-        self.assertEqual(sorted(p.name for p in self.ws.iterdir()), ["冒烟.txt"])
+        self.assertEqual(sorted(p.name for p in self.ws.iterdir()), ["冒烟.txt", "收到的提示词.txt"])
         leftovers = [p.name for p in pathlib.Path(tempfile.gettempdir()).glob("skill-eval-c-out-*")]
         self.assertEqual(leftovers, [], "-o 输出目录应随调用结束删除")
+
+    def test_codex_multiline_prompt_arrives_intact_via_stdin(self):
+        """PATH 上的 codex 是 .cmd 垫片，参数里的换行会被 cmd.exe 吞掉，所以提示词走 stdin（#28）。"""
+        prompt = "第一行：\n\n# 标题\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n:right: 落款\n"
+        inv = skill_eval.invoke("codex", self.case, self.ws, prompt, max_turns=5, timeout=20)
+        self.assertEqual(inv.status, "ok", inv.detail)
+        self.assertEqual((self.ws / "收到的提示词.txt").read_text(encoding="utf-8"), prompt)
 
     def test_codex_max_turns_kills_process(self):
         inv = skill_eval.invoke("codex", self.case, self.ws, "turns", max_turns=3, timeout=20)

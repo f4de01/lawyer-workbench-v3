@@ -11,7 +11,8 @@
 用例是一个目录 evals/用例/<名>/，三个文件：
   提示词.md   律师原本会打的那一句
   用例.json   种子（evals/种子/<场景>，可空）、skill（编排 skill 名，可空）、回复正则（可空）、
-              回合上限、超时秒、允许工具（Claude Code 侧 --allowedTools）、说明
+              回合上限、超时秒、允许工具（Claude Code 侧 --allowedTools）、
+              Codex沙箱（workspace-write 默认 / danger-full-access，要 Word COM 的用例用后者）、说明
   断言.py     每个 check_ 开头的函数是一条断言，签名 (workspace: Path, reply: str)，
               用 assert 判真伪，函数名即报红时给出的断言名
 
@@ -42,7 +43,9 @@ DEFAULT_EVALS = pathlib.Path("evals") / "用例"
 SEEDS_DIRNAME = "种子"
 DEFAULT_MAX_TURNS = 30
 DEFAULT_TIMEOUT = 300
-CASE_KEYS = {"种子", "skill", "回复正则", "回合上限", "超时秒", "允许工具", "说明"}
+CASE_KEYS = {"种子", "skill", "回复正则", "回合上限", "超时秒", "允许工具", "Codex沙箱", "说明"}
+CODEX_SANDBOXES = ("workspace-write", "danger-full-access")
+DEFAULT_CODEX_SANDBOX = "workspace-write"
 CASE_REQUIRED = ("种子", "回复正则")
 SEED_META_FILES = ("回放.py", "状态.md")
 CODEX_TOOL_ITEMS = {"command_execution", "file_change", "mcp_tool_call", "web_search"}
@@ -64,6 +67,7 @@ class Case:
     max_turns: Optional[int]
     timeout: Optional[int]
     allowed_tools: List[str]
+    codex_sandbox: str
     checks: List[Tuple[str, Callable]]
 
 
@@ -157,6 +161,9 @@ def load_case(path: pathlib.Path) -> Case:
         re.compile(reply_re)
     except re.error as e:
         raise EvalError("用例 %s 的回复正则无效：%s" % (path.name, e)) from e
+    codex_sandbox = meta.get("Codex沙箱") or DEFAULT_CODEX_SANDBOX
+    if codex_sandbox not in CODEX_SANDBOXES:
+        raise EvalError("用例 %s 的 Codex沙箱 只能是 %s，实际 %r" % (path.name, " / ".join(CODEX_SANDBOXES), codex_sandbox))
     return Case(
         name=path.name,
         path=path,
@@ -167,6 +174,7 @@ def load_case(path: pathlib.Path) -> Case:
         max_turns=meta.get("回合上限"),
         timeout=meta.get("超时秒"),
         allowed_tools=list(meta.get("允许工具") or []),
+        codex_sandbox=codex_sandbox,
         checks=load_assertions(path / "断言.py"),
     )
 
@@ -263,15 +271,19 @@ def build_prompt(harness: str, case: Case) -> str:
 
 
 def build_command(harness: str, exe: List[str], prompt: str, workspace: pathlib.Path, *,
-                  max_turns: int, last_path: pathlib.Path, allowed_tools: List[str]) -> List[str]:
+                  max_turns: int, last_path: pathlib.Path, allowed_tools: List[str],
+                  codex_sandbox: str = DEFAULT_CODEX_SANDBOX) -> List[str]:
     if harness == "claude":
         cmd = [*exe, "-p", prompt, "--output-format", "json", "--max-turns", str(max_turns),
                "--permission-mode", "acceptEdits", "--no-session-persistence"]
         if allowed_tools:
             cmd += ["--allowedTools", *allowed_tools]
         return cmd
-    return [*exe, "exec", "--skip-git-repo-check", "--ephemeral", "-s", "workspace-write",
-            "-C", str(workspace), "--json", "-o", str(last_path), prompt]
+    # Codex 沙箱里起不来 Word COM（0x80070520），要门禁的用例把 Codex沙箱 设为 danger-full-access（#28）。
+    # 提示词走 stdin（PROMPT 位置给 "-"）：PATH 上的 codex 是 npm 的 .cmd 垫片，cmd.exe 把参数里第一个换行之后的
+    # 字全吞掉，多行提示词只剩第一行（#28 出一版用例发现）。
+    return [*exe, "exec", "--skip-git-repo-check", "--ephemeral", "-s", codex_sandbox,
+            "-C", str(workspace), "--json", "-o", str(last_path), "-"]
 
 
 def kill_tree(proc: subprocess.Popen) -> None:
@@ -300,18 +312,27 @@ def invoke(harness: str, case: Case, workspace: pathlib.Path, prompt: str, max_t
     try:
         last_path = out_dir / "last.md"
         cmd = build_command(harness, exe, prompt, workspace, max_turns=max_turns,
-                            last_path=last_path, allowed_tools=case.allowed_tools)
+                            last_path=last_path, allowed_tools=case.allowed_tools, codex_sandbox=case.codex_sandbox)
         if harness == "claude":
             return _invoke_claude(cmd, workspace, timeout)
-        return _invoke_codex(cmd, workspace, max_turns, timeout, last_path)
+        return _invoke_codex(cmd, workspace, max_turns, timeout, last_path, prompt)
     finally:
         remove_workspace(out_dir)
 
 
-def _popen(cmd: List[str], workspace: pathlib.Path) -> subprocess.Popen:
-    return subprocess.Popen(cmd, cwd=str(workspace), env=harness_env(os.environ),
-                            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+def _popen(cmd: List[str], workspace: pathlib.Path, stdin_text: Optional[str] = None) -> subprocess.Popen:
+    """起 harness 子进程；stdin_text 给了就整段写进 stdin 再关掉，没给则 stdin 接空设备（codex 会等 stdin）。"""
+    proc = subprocess.Popen(cmd, cwd=str(workspace), env=harness_env(os.environ),
+                            stdin=subprocess.PIPE if stdin_text is not None else subprocess.DEVNULL,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, encoding="utf-8", errors="replace")
+    if stdin_text is not None:
+        try:
+            proc.stdin.write(stdin_text)
+        except (BrokenPipeError, OSError):
+            pass  # 子进程没读就退了，退出码那边会报
+        proc.stdin.close()
+    return proc
 
 
 def _invoke_claude(cmd: List[str], workspace: pathlib.Path, timeout: int) -> Invocation:
@@ -336,8 +357,8 @@ def _invoke_claude(cmd: List[str], workspace: pathlib.Path, timeout: int) -> Inv
 
 
 def _invoke_codex(cmd: List[str], workspace: pathlib.Path, max_turns: int, timeout: int,
-                  last_path: pathlib.Path) -> Invocation:
-    proc = _popen(cmd, workspace)
+                  last_path: pathlib.Path, prompt: str = "") -> Invocation:
+    proc = _popen(cmd, workspace, stdin_text=prompt)
     state = {"turns": 0, "capped": False, "last_message": "", "error": ""}
 
     def read_stream():
