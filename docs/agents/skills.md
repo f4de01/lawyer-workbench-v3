@@ -9,8 +9,8 @@ skills/<name>/
 ├── SKILL.md              # frontmatter：name、description；编排 skill 与路由另加 disable-model-invocation: true
 ├── agents/openai.yaml    # Codex 侧外观：interface.display_name、interface.short_description（中文进这里）；编排 skill 与路由另加 policy.allow_implicit_invocation: false
 ├── references/           # 正文按需指向的长材料
-├── scripts/              # 标准库零依赖的 CLI；只有 loo0ng-to-docx 例外（python-docx、PyMuPDF，ADR-0006）
-└── assets/               # 只有 loo0ng-domain 有：领域图、官方模板原件、指引手册原文（ADR-0004）
+├── scripts/              # 标准库零依赖的 CLI；只有 loo0ng-to-docx 例外（python-docx、PyMuPDF，ADR-0006）。互不 import；要写图的（loo0ng-domain 的雏形）以子进程调 loo0ng-graph 的引擎，默认按兄弟目录找
+└── assets/               # 只有 loo0ng-domain 有：assets/<领域>/ 下领域图、模板/ 官方模板原件、指引手册/ 指引手册原文（ADR-0004）
 ```
 
 八件平铺在 `skills/` 下，不分桶；草稿放分支不放目录。分发清单：`.claude-plugin/plugin.json` 的 `skills` 数组逐件列路径（Claude Code 插件）；`.codex-plugin/plugin.json` 的 `skills` 是单一路径 `./skills/`（Codex 递归扫描，无需逐件登记）；`.claude-plugin/marketplace.json` 让仓库自成单插件市场。
@@ -111,7 +111,7 @@ evals/
 │   └── 断言.py          # check_ 开头的函数各是一条断言，签名 (workspace: Path, reply: str)，assert 判真伪
 ├── 自检/<名>/           # 只测跑器自己的用例（如 故意失败），同格式，用 --evals evals/自检 跑
 ├── 种子/<场景>/         # 收件箱/ 等直接拷进工作区的东西 + 回放.py + 状态.md；「图引擎」种子（#26）在起手 skill 落地前自己写工作区指针块
-└── 领域/<领域名>/领域图.json   # 脚本层用的合成小领域「菜园」（ADR-0015，#26），tests/loo0ng-graph 全用它跑；领域/说明.md 一段说明
+└── 领域/<领域名>/领域图.json   # 脚本层用的合成小领域「菜园」（ADR-0015，#26），tests/loo0ng-graph 与 tests/loo0ng-domain 全用它跑；领域/说明.md 一段说明
 ```
 
 ADR-0015「目录名保持 ASCII」只指 `tests/`、`evals/` 两个顶层；其下按仓库习惯用中文（ADR 自己的例子 `evals/种子/<场景>/` 即如此），`--case 冒烟` 直接传中文名。

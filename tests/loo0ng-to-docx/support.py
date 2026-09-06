@@ -1,7 +1,6 @@
 """tests/loo0ng-to-docx 的公用件：定位仓库、模板目录与两个 CLI，跑子进程，读 DOCX 里的 XML。
 
-模板目录：官方模板原件将随 loo0ng-domain 搬进 skills/loo0ng-domain/assets/（ADR-0004、ADR-0009），搬之前在
-knowledge/模板/。这里按文件名找，两处都没有就直接报错，不 skip。
+模板目录：官方模板原件住领域目录 skills/loo0ng-domain/assets/破产/模板/（ADR-0004、ADR-0009，#29）。找不到就直接报错，不 skip。
 """
 import json
 import pathlib
@@ -23,14 +22,10 @@ DC = "{http://purl.org/dc/elements/1.1/}"
 
 
 def templates_dir() -> pathlib.Path:
-    assets = REPO / "skills" / "loo0ng-domain" / "assets"
-    if assets.is_dir():
-        for hit in assets.rglob(PROBE_TEMPLATE):
-            return hit.parent
-    legacy = REPO / "knowledge" / "模板"
-    if (legacy / PROBE_TEMPLATE).is_file():
-        return legacy
-    raise AssertionError("找不到官方模板目录（skills/loo0ng-domain/assets/ 或 knowledge/模板/）")
+    templates = REPO / "skills" / "loo0ng-domain" / "assets" / "破产" / "模板"
+    if (templates / PROBE_TEMPLATE).is_file():
+        return templates
+    raise AssertionError("找不到官方模板目录 %s" % templates)
 
 
 def template(prefix: str) -> pathlib.Path:
