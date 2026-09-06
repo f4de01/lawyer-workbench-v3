@@ -44,7 +44,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/link-skills.ps1
 
 ## Skill 清单
 
-按谁能触发分两组。八件的名单与分工见 ADR-0009；目前还没有任何 skill 落进 `skills/`，两组随实现票逐件填入。
+按谁能触发分两组。八件的名单与分工见 ADR-0009；两组随实现票逐件填入。
 
 **User-invoked**
 
@@ -56,7 +56,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/link-skills.ps1
 
 参考 skill 由模型够到，律师无需记名：律师一句话说到相关的事，模型自行调用。
 
-- （尚无）
+- `loo0ng-graph`（图引擎）：`图.json` 的唯一写入口。律师一句话改图的构成（加节点、改标题、调顺序、跨模块移动、改空白模板、增删改模块、节点或模块不适用）由它落盘并回显；编排 skill 经它追加生成与确认条目；每次写图后重算 `图视图.md` 与 `图视图.json`。
 
 ## 维护
 

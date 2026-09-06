@@ -13,5 +13,7 @@
     "skills",
     "workbench"
   ],
-  "skills": []
+  "skills": [
+    "./skills/loo0ng-graph"
+  ]
 }

@@ -343,6 +343,21 @@ class RunCaseLifecycleTest(unittest.TestCase):
         self.assertEqual(seen[0][4], ["图.json", "收件箱"])
         self.assertFalse(seen[0][0].exists())
 
+    def test_seed_replay_works_with_relative_evals_root(self):
+        """回放在工作区里跑，evals 根是相对路径（默认值就是）时种子也要找得到（#26 首次用种子时发现）。"""
+        seeds = self.root.parent / "种子"
+        write(seeds, "相对/状态.md", "说明")
+        write(seeds, "相对/回放.py", "import pathlib, sys\n(pathlib.Path(sys.argv[1]) / '图.json').write_text('{}')\n")
+        case = skill_eval.load_case(make_case(self.root, "相对根", 种子="相对"))
+        cwd = os.getcwd()
+        os.chdir(self.root.parent.parent)
+        self.addCleanup(os.chdir, cwd)
+        rel = os.path.relpath(self.root, self.root.parent.parent)
+        seen = []
+        skill_eval.run_case(case, self.opts(argv=["--evals", rel]),
+                            invoke=fake_invoke(files={"冒烟.txt": "冒烟通过"}, seen=seen))
+        self.assertEqual(seen[0][4], ["图.json"])
+
     def test_missing_seed_is_an_error_and_workspace_removed(self):
         case = skill_eval.load_case(make_case(self.root, "无种子", 种子="不存在"))
         with self.assertRaises(skill_eval.EvalError):
@@ -374,12 +389,16 @@ FAKE_CODEX = textwrap.dedent('''
         print(json.dumps(o, ensure_ascii=False), flush=True)
     emit({"type": "thread.started", "thread_id": "t"})
     emit({"type": "turn.started"})
+    if "quota" in prompt:
+        emit({"type": "error", "message": "You've hit your usage limit. try again at Sep 6th"})
+        emit({"type": "turn.failed", "error": {"message": "You've hit your usage limit. try again at Sep 6th"}})
+        sys.exit(1)
     n = 12 if "turns" in prompt else 1
     for i in range(n):
         emit({"type": "item.started", "item": {"id": "i%d" % i, "type": "file_change", "status": "in_progress"}})
         emit({"type": "item.completed", "item": {"id": "i%d" % i, "type": "file_change", "status": "completed"}})
         if "turns" in prompt:
-            time.sleep(0.2)
+            time.sleep(0.5)  # 给跑器 2 秒的 taskkill 等待留余量：超回合后须在写出文件前被杀
     if "sleep" in prompt:
         time.sleep(30)
     (ws / "冒烟.txt").write_text("冒烟通过", encoding="utf-8")
@@ -410,6 +429,12 @@ class RealInvokeWithFakeBinariesTest(unittest.TestCase):
         self.assertEqual(inv.reply, "已写入冒烟.txt。")
         self.assertEqual(inv.turns, 3)
         self.assertEqual((self.ws / "冒烟.txt").read_text(encoding="utf-8"), "冒烟通过")
+
+    def test_codex_stream_error_is_surfaced(self):
+        """codex 的错误在 JSONL 流里（如用量上限），stderr 只有一句 stdin 提示；detail 须带流里的消息（#26）。"""
+        inv = skill_eval.invoke("codex", self.case, self.ws, "quota", max_turns=5, timeout=20)
+        self.assertEqual(inv.status, "error")
+        self.assertIn("usage limit", inv.detail)
 
     def test_claude_max_turns(self):
         inv = skill_eval.invoke("claude", self.case, self.ws, "turns", max_turns=1, timeout=20)

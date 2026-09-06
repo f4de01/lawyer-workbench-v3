@@ -18,8 +18,8 @@ skills/<name>/
 ## 命名与编码
 
 - `name` 只用小写字母、数字、连字符，前缀 `loo0ng-` 写进 name 本身；路由是 `ask-loo0ng`。理由：skills.sh 分发链把非 ASCII 名装成 `unnamed-skill`，Codex `$` 提及只认 ASCII；两平台本身不拦（#18 项 1）。目录名与 `name` 一致。
-- 中文只进三处：`agents/openai.yaml` 的 `interface.display_name` 与 `interface.short_description`（Matt 同款，本仓库用这两个），以及 `SKILL.md` frontmatter 的 `metadata.short-description`（Codex 也读，Claude Code 当自由映射不动作；可选）。`name` 与 `description` 之外的中文不进别处。
-- `agents/openai.yaml` 按 ADR-0009 应机械生成；生成器随首件 skill 的实现票建立，在此之前手写，字段只有上面两个加双旗的 `policy`。
+- 中文显示名与短描述只写在 `SKILL.md` frontmatter 的 `metadata.display-name` 与 `metadata.short-description`（后者 Codex 也读，Claude Code 当自由映射不动作）；`agents/openai.yaml` 的 `interface.display_name` / `interface.short_description` 由生成器从这两处抄出，不手写。`name` 与 `description` 之外的中文不进别处。
+- `agents/openai.yaml` 由 `python scripts/gen-openai-yaml.py` 机械生成（ADR-0009；#26 随首件 skill 建立）：字段只有上面两个，编排 skill 与路由按 frontmatter 的 `disable-model-invocation: true` 推出 `policy.allow_implicit_invocation: false`。`--check` 只比对不写，任一份不同步即退出码 1。
 - `SKILL.md`、`agents/openai.yaml` 与所有 PowerShell 以外的文本文件不带 BOM：带 BOM 的 `SKILL.md` 会让 Codex 静默跳过整个根目录（#20）。PowerShell 5.1 脚本必须带 UTF-8 BOM，否则中文注释按 ANSI 读会撕坏语法（#18）。
 - 全仓禁破折号（U+2014）。连接号 U+2013 用于数字区间，不在此列。
 - frontmatter 的 `description` 加双引号：不加引号时 ` #` 起 YAML 注释，两平台都把其后的字截掉（#24 空壳验证时发现）。
@@ -37,12 +37,12 @@ skills/<name>/
 | 编排 skill、路由 | `disable-model-invocation: true` | `policy.allow_implicit_invocation: false` |
 | 参考 skill | 不写 | 不写 `policy` |
 
-两平台各读各的旗，互不认对方的（#18 项 3）：两处必须同时改。
+两平台各读各的旗，互不认对方的（#18 项 3）：`SKILL.md` 的旗是源，`openai.yaml` 的 `policy` 由生成器推出，重跑生成器即同步。
 
 ## 登记步骤（新增、改名、删除都走一遍）
 
 1. `skills/<name>/` 落目录，按上面的布局与命名、编码规则。
-2. 双旗按类型写齐。
+2. 双旗按类型写齐：`SKILL.md` 里写旗与 `metadata.display-name` / `short-description`，再跑 `python scripts/gen-openai-yaml.py` 生成 `agents/openai.yaml`。
 3. `.claude-plugin/plugin.json` 的 `skills` 数组加（或改、删）`./skills/<name>`。
 4. `README.md` 的 User-invoked 或 Model-invoked 组加（或改、删）一行。
 5. 动到任一入口（`loo0ng-setup-case`、`loo0ng-doit`、`ask-loo0ng`）时，改 `ask-loo0ng` 自持的入口表（ADR-0005）。
@@ -74,6 +74,9 @@ for f in scripts/*.ps1; do printf '%s ' "$f"; head -c 3 "$f" | od -An -tx1; done
 
 # 三处版本一致
 npm run check-plugin-version
+
+# agents/openai.yaml 与 SKILL.md frontmatter 同步，期望退出码 0
+python scripts/gen-openai-yaml.py --check
 ```
 
 ## 测试命令
@@ -105,8 +108,8 @@ evals/
 │   ├── 用例.json        # 见下
 │   └── 断言.py          # check_ 开头的函数各是一条断言，签名 (workspace: Path, reply: str)，assert 判真伪
 ├── 自检/<名>/           # 只测跑器自己的用例（如 故意失败），同格式，用 --evals evals/自检 跑
-├── 种子/<场景>/         # 随起手票落地：收件箱/ 等直接拷进工作区的东西 + 回放.py + 状态.md
-└── 领域/                # 脚本层用的合成小领域（ADR-0015），随引擎票落地
+├── 种子/<场景>/         # 收件箱/ 等直接拷进工作区的东西 + 回放.py + 状态.md；「图引擎」种子（#26）在起手 skill 落地前自己写工作区指针块
+└── 领域/<领域名>/领域图.json   # 脚本层用的合成小领域「菜园」（ADR-0015，#26），tests/loo0ng-graph 全用它跑；领域/说明.md 一段说明
 ```
 
 ADR-0015「目录名保持 ASCII」只指 `tests/`、`evals/` 两个顶层；其下按仓库习惯用中文（ADR 自己的例子 `evals/种子/<场景>/` 即如此），`--case 冒烟` 直接传中文名。

@@ -215,7 +215,8 @@ def remove_workspace(path: pathlib.Path) -> None:
 def replay_seed(evals_root: pathlib.Path, seed: str, workspace: pathlib.Path) -> None:
     """种子接口：evals/种子/<场景>/ 里除 回放.py 与 状态.md 之外的东西拷进工作区，
     再在工作区里跑 python 回放.py <工作区>（起手 + 引擎 CLI + 归档脚本都写在回放里）。"""
-    seed_dir = pathlib.Path(evals_root).parent / SEEDS_DIRNAME / seed
+    # 回放在工作区里跑（cwd 是工作区），evals 根默认是相对路径，须先转绝对。
+    seed_dir = (pathlib.Path(evals_root).resolve().parent / SEEDS_DIRNAME / seed)
     if not seed_dir.is_dir():
         raise EvalError("种子不存在：%s" % seed_dir)
     for entry in seed_dir.iterdir():
@@ -274,11 +275,18 @@ def build_command(harness: str, exe: List[str], prompt: str, workspace: pathlib.
 
 
 def kill_tree(proc: subprocess.Popen) -> None:
+    """杀整棵进程树。Windows 上先 taskkill /T；它偶尔会卡住（本机见过 RPC 超时 60 秒，#26），
+    等 2 秒等不到就放弃它、只杀直接子进程，跑器自己不能跟着卡死。"""
     if proc.poll() is not None:
         return
     if os.name == "nt":
-        subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True)
-    else:
+        killer = subprocess.Popen(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            killer.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            killer.kill()
+    if proc.poll() is None:
         proc.kill()
     try:
         proc.wait(timeout=10)
@@ -330,7 +338,7 @@ def _invoke_claude(cmd: List[str], workspace: pathlib.Path, timeout: int) -> Inv
 def _invoke_codex(cmd: List[str], workspace: pathlib.Path, max_turns: int, timeout: int,
                   last_path: pathlib.Path) -> Invocation:
     proc = _popen(cmd, workspace)
-    state = {"turns": 0, "capped": False, "last_message": ""}
+    state = {"turns": 0, "capped": False, "last_message": "", "error": ""}
 
     def read_stream():
         for line in proc.stdout:
@@ -339,6 +347,8 @@ def _invoke_codex(cmd: List[str], workspace: pathlib.Path, max_turns: int, timeo
             except ValueError:
                 continue
             item = event.get("item") or {}
+            if event.get("type") == "error" and event.get("message"):
+                state["error"] = str(event["message"])  # 用量上限之类的错只在流里，stderr 没有
             if event.get("type") == "item.started" and item.get("type") in CODEX_TOOL_ITEMS:
                 state["turns"] += 1
                 if state["turns"] > max_turns and not state["capped"]:
@@ -366,8 +376,8 @@ def _invoke_codex(cmd: List[str], workspace: pathlib.Path, max_turns: int, timeo
         return Invocation("max_turns", "", state["turns"], "工具调用超过回合上限 %d，已杀进程树" % max_turns)
     reply = last_path.read_text(encoding="utf-8") if last_path.is_file() else state["last_message"]
     if proc.returncode != 0:
-        return Invocation("error", reply, state["turns"], "codex 退出码 %d：%s" % (
-            proc.returncode, stderr.strip()[-800:]))
+        detail = state["error"] or stderr.strip()[-800:]
+        return Invocation("error", reply, state["turns"], "codex 退出码 %d：%s" % (proc.returncode, detail))
     return Invocation("ok", reply, state["turns"])
 
 
