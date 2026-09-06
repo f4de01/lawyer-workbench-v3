@@ -84,12 +84,50 @@ npm run check-plugin-version
 for d in tests/*/; do python -m unittest discover -s "$d" -p 'test_*.py' || exit 1; done
 ```
 
-skill 层 eval（一个跑器两个后端 `scripts/skill-eval.py --harness claude|codex`，用例与种子在 `evals/`）随测试基建票建立，命令占位：
+skill 层 eval：一个跑器两个后端，用例与种子在 `evals/`（ADR-0015，#25）：
 
 ```bash
-python scripts/skill-eval.py --harness claude    # 占位，跑器尚未落进仓库
-python scripts/skill-eval.py --harness codex     # 占位
+python scripts/skill-eval.py --harness claude                 # Claude Code 侧，走 claude -p
+python scripts/skill-eval.py --harness codex                  # Codex 侧，走 codex exec
+python scripts/skill-eval.py --harness claude --case 冒烟     # 只跑一个用例；--case 可重复
+python scripts/skill-eval.py --harness codex --runs 3         # 怀疑抖动时多跑几次
+python scripts/skill-eval.py --harness claude --evals evals/自检   # 跑器自检用例（故意失败），不进门槛
 ```
+
+其他参数：`--max-turns N`、`--timeout 秒` 覆盖用例里的值；`--keep` 跑完不删工作区，只为排障。退出码 0 全绿、1 有红、2 用法或用例配置错。结果只打印不进仓库。从 Claude Code 会话内跑 `--harness claude` 不用自己去环境变量：跑器已去掉 `CLAUDECODE` 两项并带上 `MSYS_NO_PATHCONV=1`。
+
+### `evals/` 目录
+
+```
+evals/
+├── 用例/<名>/           # 合入门槛跑的用例，目录名即用例名
+│   ├── 提示词.md        # 律师原本会打的那一句
+│   ├── 用例.json        # 见下
+│   └── 断言.py          # check_ 开头的函数各是一条断言，签名 (workspace: Path, reply: str)，assert 判真伪
+├── 自检/<名>/           # 只测跑器自己的用例（如 故意失败），同格式，用 --evals evals/自检 跑
+├── 种子/<场景>/         # 随起手票落地：收件箱/ 等直接拷进工作区的东西 + 回放.py + 状态.md
+└── 领域/                # 脚本层用的合成小领域（ADR-0015），随引擎票落地
+```
+
+ADR-0015「目录名保持 ASCII」只指 `tests/`、`evals/` 两个顶层；其下按仓库习惯用中文（ADR 自己的例子 `evals/种子/<场景>/` 即如此），`--case 冒烟` 直接传中文名。
+
+`用例.json` 的键（多一个未知键即报错）：
+
+| 键 | 含义 |
+| --- | --- |
+| `种子` | `evals/种子/` 下的场景名，本票允许为空 |
+| `skill` | 编排 skill 名，可空。Claude Code 侧拼成 `/<skill> <提示词>`，按 junction 路线（`link-skills.ps1`）的名字，插件路线的 `/loo0ng-skills:<skill>` 不在此列；Codex 侧用替身提示词「读 `~/.agents/skills/<skill>/SKILL.md` 并照做：<提示词>」，测的是正文不是触发，触发另由人工实测与完成定义那一次覆盖。带 skill 的用例必须有 `说明` |
+| `回复正则` | 对最后一条回复做 `re.search`，可空；报红时断言名是「回复正则」 |
+| `回合上限` | Claude Code 侧交给 `--max-turns`；Codex 侧数 JSONL 流里工具类 item（命令、改文件、MCP、搜索），超了杀进程树。默认 30 |
+| `超时秒` | 单次调用的墙钟上限，超了杀进程树。默认 300 |
+| `允许工具` | Claude Code 侧 `--allowedTools` 的列表（如 `["Bash(python *)"]`）；权限模式固定 acceptEdits。Codex 侧沙箱 workspace-write，不需要 |
+| `说明` | 一句话，含用例的局限；带 skill 时必填，写明替身提示词的局限 |
+
+每次运行：在 `%TEMP%` 下建临时工作区 → 回放种子 → 调 harness（cwd 即工作区）→ 回复正则 → 逐条断言 → 删工作区（超时、超回合、断言抛错都删）。断言报红时给出函数名与 assert 的消息。
+
+种子接口（实现随起手票）：`evals/种子/<场景>/` 里除 `回放.py` 与 `状态.md` 之外的条目原样拷进工作区，再在工作区里跑 `python 回放.py <工作区>`；起手（`loo0ng-setup-case`）、引擎 CLI、归档脚本都写在回放里，跑器不另定回放格式。
+
+Windows 上工作区用 `os.mkdir` 而不用 `tempfile.mkdtemp`：后者建的目录只有 SYSTEM、Administrators、OWNER RIGHTS 三条 ACE，Codex 沙箱账户写进去的文件本用户读不了也删不了。
 
 合入门槛 = 脚本层全绿 + 两侧 eval 全绿 + 三条校验；关票门槛 = 真实案件里 Codex 与 Claude Code 各触发一次（ADR-0015）。
 
