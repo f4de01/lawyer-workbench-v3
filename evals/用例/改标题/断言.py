@@ -49,6 +49,11 @@ def check_视图json来源与时限按id查出(workspace, reply):
     assert view["格式版本"] == _graph(workspace)["格式版本"], "两份 JSON 的格式版本应一致"
 
 
+def _is_harness_noise(name):
+    """harness 跑 python 时留下的缓存目录（__pycache__、.uv-cache、.uv-python 等），不算工作区产物。"""
+    return name == "__pycache__" or name.startswith(".")
+
+
 def check_没写别的文件(workspace, reply):
-    names = sorted(p.name for p in workspace.iterdir())
+    names = sorted(p.name for p in workspace.iterdir() if not _is_harness_noise(p.name))
     assert names == ["AGENTS.md", "CLAUDE.md", "图.json", "图视图.json", "图视图.md"], "工作区里多出了文件：%s" % names
