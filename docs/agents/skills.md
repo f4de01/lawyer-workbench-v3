@@ -7,7 +7,7 @@
 ```
 skills/<name>/
 ├── SKILL.md              # frontmatter：name、description；编排 skill 与路由另加 disable-model-invocation: true
-├── agents/openai.yaml    # Codex 侧外观：interface.display_name、interface.short_description（中文进这里）；编排 skill 与路由另加 policy.allow_implicit_invocation: false
+├── agents/openai.yaml    # Codex 侧外观：interface.display_name（= name）、interface.short_description（中文进这里）；编排 skill 与路由另加 policy.allow_implicit_invocation: false
 ├── references/           # 正文按需指向的长材料
 ├── scripts/              # 标准库零依赖的 CLI；只有 loo0ng-to-docx 例外（python-docx、PyMuPDF，ADR-0006）。互不 import；要写图的（loo0ng-domain 的雏形）以子进程调 loo0ng-graph 的引擎，默认按兄弟目录找
 └── assets/               # 只有 loo0ng-domain 有：assets/<领域>/ 下领域图、模板/ 官方模板原件、指引手册/ 指引手册原文（ADR-0004）
@@ -18,7 +18,7 @@ skills/<name>/
 ## 命名与编码
 
 - `name` 只用小写字母、数字、连字符，前缀 `loo0ng-` 写进 name 本身；路由是 `ask-loo0ng`。理由：skills.sh 分发链把非 ASCII 名装成 `unnamed-skill`，Codex `$` 提及只认 ASCII；两平台本身不拦（#18 项 1）。目录名与 `name` 一致。
-- 中文显示名与短描述只写在 `SKILL.md` frontmatter 的 `metadata.display-name` 与 `metadata.short-description`（后者 Codex 也读，Claude Code 当自由映射不动作）；`agents/openai.yaml` 的 `interface.display_name` / `interface.short_description` 由生成器从这两处抄出，不手写。`name` 与 `description` 之外的中文不进别处。
+- `metadata.display-name` 必须等于 `name`（生成器校验）：Codex 的 `$` 补全列表显示的是它，律师按 `loo0ng-` 名字找，中文显示名反而找不到（#29 真实触发时发现，ADR-0009 附注）。中文短描述只写在 `metadata.short-description`（Codex 也读，Claude Code 当自由映射不动作）；`agents/openai.yaml` 的 `interface.display_name` / `interface.short_description` 由生成器从这两处抄出，不手写。`name`、`description`、`short-description` 之外的中文不进别处。
 - `agents/openai.yaml` 由 `python scripts/gen-openai-yaml.py` 机械生成（ADR-0009；#26 随首件 skill 建立）：字段只有上面两个，编排 skill 与路由按 frontmatter 的 `disable-model-invocation: true` 推出 `policy.allow_implicit_invocation: false`。`--check` 只比对不写，任一份不同步即退出码 1。
 - `SKILL.md`、`agents/openai.yaml` 与所有 PowerShell 以外的文本文件不带 BOM：带 BOM 的 `SKILL.md` 会让 Codex 静默跳过整个根目录（#20）。PowerShell 5.1 脚本必须带 UTF-8 BOM，否则中文注释按 ANSI 读会撕坏语法（#18）。
 - 全仓禁破折号（U+2014）。连接号 U+2013 用于数字区间，不在此列。
@@ -28,7 +28,7 @@ skills/<name>/
 
 - User-invoked（编排 skill 与路由）：一句人话，功能加后面跟什么，去掉触发词。
 - Model-invoked（参考 skill）：四要素齐全（功能、触发、负向、邻居互指），第三人称、中文、触发词放最前、不超过 1,024 字。
-- 跨 skill 只用「调用 skill "loo0ng-xxx"」一种句式，散文里用中文显示名；改名于是成为纯机械替换。
+- 跨 skill 只用「调用 skill "loo0ng-xxx"」一种句式，散文里可用中文叫法（如「图引擎」，只是行文，不是元数据）；改名于是成为纯机械替换。
 
 ## 双旗
 

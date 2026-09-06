@@ -4,6 +4,8 @@
 源是 frontmatter 里的 metadata.display-name、metadata.short-description 与 disable-model-invocation；
 产物只有 interface.display_name、interface.short_description，编排 skill 与路由（disable-model-invocation: true）
 另加 policy.allow_implicit_invocation: false。写出的文件 LF、不带 BOM。
+display-name 必须等于 skill 目录名（即 name）：Codex 的 $ 补全显示的是它，律师按 loo0ng- 名字找（#29，ADR-0009 附注）；
+中文只进 short-description。
 
 用法：
   python scripts/gen-openai-yaml.py [--check] [--skills skills]
@@ -67,6 +69,8 @@ def render(front: Dict[str, object], skill_dir: pathlib.Path) -> str:
     short = meta.get("short-description")
     if not display or not short:
         raise GenError("%s 的 frontmatter 须有 metadata.display-name 与 metadata.short-description" % skill_dir.name)
+    if display != skill_dir.name:
+        raise GenError("%s 的 metadata.display-name 须等于目录名（Codex $ 补全显示它），实际 %r" % (skill_dir.name, display))
     out = ["interface:", '  display_name: "%s"' % display, '  short_description: "%s"' % short]
     if str(front.get("disable-model-invocation", "")).lower() == "true":
         out += ["policy:", "  allow_implicit_invocation: false"]

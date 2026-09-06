@@ -2,7 +2,7 @@
 name: loo0ng-domain
 description: "律师一句话要从本案指南长雏形（按这份指南出雏形、从指南里提节点、指南里还有哪些没建）、起手末尾归档后 指南/ 非空要出起手清单里的雏形、或要找官方模板原件、指引手册原文、领域图在哪时用；开发会话里对通用指引手册出领域图、把案件图里判为通用的节点回流进领域图也用它。它持有领域目录（一个领域一个目录：领域图.json、模板/ 官方模板原件、指引手册/ 指引手册原文，随 skill 包内置在本 skill 的 assets 下，也可独立交付）与雏形机制的零依赖 CLI：模型整读指南写成雏形文件，CLI 按标题判重（同名不再提、相似不同名列为待定）、回显清单，律师一句话拍板后才经 skill \"loo0ng-graph\" 的引擎写入。改图的其他构成与追加条目归 skill \"loo0ng-graph\"；收件箱归档与律师陈述归 skill \"loo0ng-filing\"；出一版文书与拍板由 skill \"loo0ng-doit\" 驱动；起手由 skill \"loo0ng-setup-case\" 驱动；问在哪、下一步做什么是 skill \"ask-loo0ng\"。它不含任何领域语义，没有领域图也能从空图起手；未拍板不写图，不读材料，不改律师写过的东西。"
 metadata:
-  display-name: "领域目录与雏形"
+  display-name: "loo0ng-domain"
   short-description: "领域目录三样；从指南长雏形，拍板后经引擎写入"
 ---
 

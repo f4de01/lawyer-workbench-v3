@@ -53,3 +53,7 @@ date: 2026-09-05
 ## 附注（2026-09-06，#24）
 
 被 #18 推翻或改写的四项按其决议表落进 `docs/agents/skills.md`，本文不重写：(1)「`name:` 只能小写字母数字连字符（两平台校验硬限）」的理由改为 skills.sh 分发链拦非 ASCII 加 Codex `$` 提及只认 ASCII，两平台本身不拦；(2)「改完跑 `claude plugin validate . --strict`」拆为 marketplace 严格、skills 严格、plugin.json 非严格三条；(3)「`.codex-plugin/plugin.json` 指 `./skills/` 列为实验项」升正式；(4)「改后重跑 `link-skills.ps1`」只在改名、增删后。另：「中文只进 `interface.display_name` 与 `metadata.short-description`」里后者是 `SKILL.md` frontmatter 的键（Codex 读），`agents/openai.yaml` 对应的键是 `interface.short_description`，两处都可放中文，本仓库照 Matt 用 openai.yaml 的两个。
+
+## 附注（2026-09-06，#29）
+
+「中文只进 `interface.display_name` 与 `metadata.short-description`」改为只进后者：`display_name` 必须等于 `name`。#29 关票的真实触发里，Codex 的 `$` 补全列表显示的是 `display_name`，律师按 `loo0ng-` 名字找，四条中文显示名一条都对不上；名字本来就是 `name`，显示名不该是第二个名字。短描述那一列仍是中文。生成器 `scripts/gen-openai-yaml.py` 机械校验这一条。

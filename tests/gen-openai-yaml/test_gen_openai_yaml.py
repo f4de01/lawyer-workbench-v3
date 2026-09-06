@@ -22,7 +22,7 @@ REFERENCE_SKILL = '''---
 name: loo0ng-demo
 description: "参考 skill 的四要素描述，含 #号 与 \\"引号\\"。"
 metadata:
-  display-name: "示例引擎"
+  display-name: "loo0ng-demo"
   short-description: "改构成、追加条目"
 ---
 
@@ -34,7 +34,7 @@ name: ask-demo
 description: "路由：一句人话。"
 disable-model-invocation: true
 metadata:
-  display-name: "问路"
+  display-name: "ask-demo"
   short-description: "找到该打哪个入口"
 ---
 '''
@@ -63,7 +63,7 @@ class GenTest(unittest.TestCase):
         self.assertEqual(code, 0, out)
         text = (d / "agents" / "openai.yaml").read_bytes()
         self.assertEqual(text.decode("utf-8"),
-                         'interface:\n  display_name: "示例引擎"\n  short_description: "改构成、追加条目"\n')
+                         'interface:\n  display_name: "loo0ng-demo"\n  short_description: "改构成、追加条目"\n')
         self.assertFalse(text.startswith(b"\xef\xbb\xbf"), "不带 BOM")
         self.assertNotIn(b"\r\n", text, "LF")
 
@@ -71,7 +71,7 @@ class GenTest(unittest.TestCase):
         d = self.put("ask-demo", ROUTER_SKILL)
         self.assertEqual(self.run_cli()[0], 0)
         self.assertEqual((d / "agents" / "openai.yaml").read_text(encoding="utf-8"),
-                         'interface:\n  display_name: "问路"\n  short_description: "找到该打哪个入口"\n'
+                         'interface:\n  display_name: "ask-demo"\n  short_description: "找到该打哪个入口"\n'
                          'policy:\n  allow_implicit_invocation: false\n')
 
     def test_check_reports_stale_and_writes_nothing(self):
@@ -85,8 +85,15 @@ class GenTest(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertIn("已同步", out)
 
+    def test_display_name_must_equal_directory_name(self):
+        self.put("loo0ng-demo", REFERENCE_SKILL.replace('display-name: "loo0ng-demo"', 'display-name: "示例引擎"'))
+        code, out, err = self.run_cli()
+        self.assertEqual(code, 2, err)
+        self.assertIn("display-name", err)
+        self.assertIn("目录名", err)
+
     def test_missing_display_name_is_an_error(self):
-        self.put("loo0ng-bad", REFERENCE_SKILL.replace('  display-name: "示例引擎"\n', ""))
+        self.put("loo0ng-bad", REFERENCE_SKILL.replace('  display-name: "loo0ng-demo"\n', ""))
         code, _, err = self.run_cli()
         self.assertEqual(code, 2)
         self.assertIn("display-name", err)
