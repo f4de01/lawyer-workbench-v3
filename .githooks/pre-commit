@@ -1,0 +1,4 @@
+#!/bin/sh
+# 隐私钩子 shim（ADR-0014）：扫暂存改动；由 scripts/link-skills.ps1 设 core.hooksPath 装上。
+command -v python3 >/dev/null 2>&1 && exec python3 scripts/privacy-check.py --staged
+exec python scripts/privacy-check.py --staged

@@ -4,3 +4,4 @@
 *.docx binary
 *.doc binary
 *.pdf binary
+.githooks/* text eol=lf

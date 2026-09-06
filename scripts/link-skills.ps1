@@ -6,6 +6,7 @@
 # 本文件须带 UTF-8 BOM：Windows PowerShell 5.1 无 BOM 时按 ANSI 读，中文注释会撕坏语法。
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
+git -C $repo config core.hooksPath .githooks   # 隐私钩子（ADR-0014）：.githooks/ 里的 pre-commit 与 commit-msg
 $skillsRoot = Join-Path $repo 'skills'
 $dests = @((Join-Path $HOME '.claude\skills'), (Join-Path $HOME '.agents\skills'))
 

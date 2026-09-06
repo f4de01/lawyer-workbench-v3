@@ -1,6 +1,6 @@
 # Issue tracker: GitHub
 
-> **Hard boundary 1 applies here.** No real case material, client identifiers, or sensitive-term lists in issue titles, bodies, comments, or PRs. Case references point only at external paths under `D:\Claude\Data\Cases\` (the root only, never a directory beneath it). Before `gh issue create` / `gh issue comment`, pipe the body through `scripts/privacy-check.py --stdin` (ADR-0014; until that script lands, self-check against the same five patterns: court case numbers, paths beneath the Cases root, mobile numbers, ID numbers, unified social credit codes).
+> **Hard boundary 1 applies here.** No real case material, client identifiers, or sensitive-term lists in issue titles, bodies, comments, or PRs. Case references point only at external paths under `D:\Claude\Data\Cases\` (the root only, never a directory beneath it). Before `gh issue create` / `gh issue comment`, write the body to a file and pipe it through the checker: `python scripts/privacy-check.py --stdin < body.md` (ADR-0014). Exit code 0 means clean; a non-zero exit lists the line and category of each hit (court case number, path beneath the Cases root, mobile number, ID number, unified social credit code). Then pass the same file with `--body-file body.md`. Never rewrite the body to slip past the checker; remove the case content instead.
 
 
 Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
