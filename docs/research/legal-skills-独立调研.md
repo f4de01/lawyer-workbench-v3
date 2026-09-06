@@ -1,5 +1,7 @@
 # legal-skills 独立调研报告（就仓库论仓库）
 
+> 引文里的破折号已按全仓禁破折号的规则改为逗号或冒号，其余逐字。
+
 > **生成方式**：由一个独立调研 agent 在 2026-09-03 生成。该 agent 只被允许读取 legal-skills 的本地克隆，**未读取本项目（律师工作台 3.0）的任何文件**，也不知道本项目的存在。因此本文只描述 legal-skills 本身，不含任何对比。对比见同目录《legal-skills-与本项目交叉对比.md》。
 > **对象**：github.com/cat-xierluo/legal-skills，外部公开仓库，与本项目及本项目作者无任何关联，仅业务领域相同。
 > **红线**：本文不含案件数据；legal-skills 仓库内出现的真实当事人姓名、内部案件编号一律不转录。
@@ -10,12 +12,12 @@
 |---|---|---|
 | commit | `3a8fdd36…`，提交日期 2026-09-04，标题「fix(multi-agent-orchestration): 封堵 reviewer Update 越界 (#122)」 | `git log -1 --date=short` |
 | 历史深度 | 本地克隆只有 1 个 commit（`git rev-list --count HEAD` = 1），作者为仓库署名律师本人；**无法做提交频率/多作者统计** | `git rev-list --count HEAD`、`git log --format=%an` |
-| skill 数量 | 63 个（`find skills -maxdepth 2 -name SKILL.md \| wc -l` = 63；`ls skills \| wc -l` = 63） | — |
-| 仓库文件数 | 3570（`git ls-tree -r HEAD --name-only \| wc -l`），其中 `.md` 915 个 | — |
-| 脚本规模 | 非测试脚本约 12.3 万行，测试脚本约 2.4 万行（`find … ! -path '*test*' \| xargs cat \| wc -l`），有测试文件的 skill 20 个 | — |
+| skill 数量 | 63 个（`find skills -maxdepth 2 -name SKILL.md \| wc -l` = 63；`ls skills \| wc -l` = 63） | 无 |
+| 仓库文件数 | 3570（`git ls-tree -r HEAD --name-only \| wc -l`），其中 `.md` 915 个 | 无 |
+| 脚本规模 | 非测试脚本约 12.3 万行，测试脚本约 2.4 万行（`find … ! -path '*test*' \| xargs cat \| wc -l`），有测试文件的 skill 20 个 | 无 |
 | 许可证 | 双轨：MIT（工具类）与 CC-BY-NC（法律专业类）；`skills/*/LICENSE.txt` 55 份 | `README.md` L13-L23「本项目采用两种许可证」；`AGENTS.md` L86-L105 |
 | 最近更新 | `skills/multi-agent-orchestration/CHANGELOG.md` 顶部「## [2.15.0] - 2026-09-04」；README 最近更新表首行 2026-09-04 | `README.md` L37 |
-| 作者定位（原文） | 「本项目旨在沉淀并分发面向法律工作者的 AI Agent Skills。法律从业者兼具专业工作者与创作者的双重身份——既要处理法律业务，也需要撰写专业文章、整理资料、分享知识。」 | `README.md` L49 |
+| 作者定位（原文） | 「本项目旨在沉淀并分发面向法律工作者的 AI Agent Skills。法律从业者兼具专业工作者与创作者的双重身份，既要处理法律业务，也需要撰写专业文章、整理资料、分享知识。」 | `README.md` L49 |
 | 作者自述方向 | 「我正在探索法律领域的 FDE（Forward Deployed Engineer）协作模式：深入真实法律业务场景……」 | `README.md` L5 |
 
 ---
@@ -77,7 +79,7 @@
 | 文件 | 要求 | 实际 |
 |---|---|---|
 | AGENTS.md | 根目录，436 行，含 28 版变更历史（L393-L427，v1.0.0 2026-01-07 → v1.9.0 2026-08-09） | 存在 |
-| CONTRIBUTING | 无此文件 | — |
+| CONTRIBUTING | 无此文件 | 无 |
 | CHANGELOG.md（技能级） | `AGENTS.md` L9「本项目的 CHANGELOG.md、DECISIONS.md、TASKS.md 等文档均为技能级别……不创建项目级别的文档」 | 63/63 存在。篇幅从 9 行（dsh-plugin-lint）到 1491 行（multi-agent-orchestration），contract-copilot 1112、pdf-processor 1176 |
 | DECISIONS.md / TASKS.md | `AGENTS.md` L6、L14 要求每个技能目录含之；L165-L172 要求执行时写入 | **`.gitignore` L21-L22 `**/DECISIONS.md` `**/TASKS.md` 全局忽略**；`git ls-tree -r HEAD` 中仅 5 个例外被强制入库：md2word（DECISIONS+TASKS）、multica-skill-update、skill-lint、svg-book-illustrator（DECISIONS）。即 63 个 skill 中 4 个有 DECISIONS.md（6%），1 个有 TASKS.md |
 | DEC 引用 | CHANGELOG 里 `DEC-xxx` 引用共 181 处（`grep -o 'DEC-[A-Z]*-\?[0-9]\+' skills/*/CHANGELOG.md \| wc -l`），9 个 SKILL.md 直接链接 DECISIONS.md | 绝大多数被引用的决策文本在公开仓库里**不存在** |
@@ -98,7 +100,7 @@
 
 ### 1.7 隐私与安全工程
 
-- **pre-commit 隐私守门**：`.githooks/pre-commit`（39 行）对暂存 diff 硬拦截「手机号 / 18 位身份证 / 座机 / 本机绝对路径 / 真实法院案号」（L4、L23-L28），案号正则覆盖「民初|刑初|行初|民终|民申|执|破」；支持本地黑名单 `.githooks/local-denylist`，「该文件通过 .git/info/exclude 排除，本地维护、绝不入库——黑名单放公开仓库等于二次泄露」（L7）。需用户手动 `git config core.hooksPath .githooks`（`README.md` L743）。
+- **pre-commit 隐私守门**：`.githooks/pre-commit`（39 行）对暂存 diff 硬拦截「手机号 / 18 位身份证 / 座机 / 本机绝对路径 / 真实法院案号」（L4、L23-L28），案号正则覆盖「民初|刑初|行初|民终|民申|执|破」；支持本地黑名单 `.githooks/local-denylist`，「该文件通过 .git/info/exclude 排除，本地维护、绝不入库，黑名单放公开仓库等于二次泄露」（L7）。需用户手动 `git config core.hooksPath .githooks`（`README.md` L743）。
 - **矛盾之处**：被跟踪的 `.claude/settings.local.json` 内含一条作者本机 `/Users/<用户名>/…` 的 hook 路径（`grep -c '/Users/' .claude/settings.local.json` = 1），正是该钩子第 26 行要拦的模式；推测该文件早于钩子提交或用 `--no-verify` 绕过。
 - **敏感信息规范**：`AGENTS.md` L250-L301（.env 模板、提交前检查、泄露应急）；`.gitignore` 大量 `!skills/x/config/*.schema.json` 白名单与 `config/*.local.*` 黑名单（L43-L66）。
 - **脱敏规则**：legal-case-analysis 在 `SKILL.md` L47-L60 定义「脱敏输出模式（场景化可选）」+「安全底线」（身份证号、银行账号等「无论是否开启脱敏模式，都不应原样输出」）；legal-qa-extractor `SKILL.md` L28「脱敏处理标准」；13 个 SKILL.md 提到脱敏（`grep -c 脱敏`）。
@@ -162,12 +164,12 @@
 - mineru-ocr｜MinerU 云端 API 转 Markdown｜1（1106 行）｜无｜.env
 - paddle-ocr｜PaddleOCR 结构化解析｜6（1145 行）｜1｜config
 - pdf-processor｜扫描件预处理/双层 PDF/合并/压缩｜20（10841 行）｜5｜config
-- pdf-organizer｜法律 PDF 页面索引、拆分、重命名｜1（1295 行）｜无｜—
-- img2pdf｜截图/长图排版为 A4 PDF｜1（496 行）｜无｜—
+- pdf-organizer｜法律 PDF 页面索引、拆分、重命名｜1（1295 行）｜无｜无
+- img2pdf｜截图/长图排版为 A4 PDF｜1（496 行）｜无｜无
 - video-screenshot｜录屏抽帧、证据线索索引｜8（6921 行）｜无｜config 两份 JSON
 - funasr-transcribe / tingwu-asr / dingtalk-minutes｜本地/云端/钉钉转录｜9/10/5｜0/2/0｜config
 - transcription-corrector｜按词典纠 ASR｜无｜无｜config.env
-- wechat-article-fetch｜抓公众号文章｜1（582 行）｜无｜—
+- wechat-article-fetch｜抓公众号文章｜1（582 行）｜无｜无
 - legal-text-format｜法条/案例文本规范化为 Markdown｜1（365 行）｜无｜archive 机制
 
 **检索**
@@ -219,13 +221,13 @@
 | **C. review-plan.json → contract-copilot → 修订版 docx + 意见书 docx** | 分层审查、写 `review-plan.json` | 自研 `XMLEditor` 直接写 `w:ins/w:del/comments`，`report_docx.py` 生成意见书，`report/integrity.py` 完整性 verifier | 6937 行 + 735 行测试 | 「交付前由独立完整性 verifier 阻断」（RETROSPECTIVE L119）；不可信 DOCX 预检、`defusedxml`（L120） |
 | **D. Markdown/YAML → render.py → HTML → Playwright PDF** | 写报告内容、选调色板 | `render.py`（468 行）套 HTML 模板，`pdf.py`（182 行）Chromium `page.pdf()`，`validate_report.py` 校验 | 1478 行 ×2 | selftest 3 个；「DRAFT 人工发布门禁」 |
 | **E. VizSpec → draw.io → SVG/PNG/PDF** | 写 VizSpec/选场景 | `apply_visual_roles.py` 改样式不改几何，`export_drawio.py` 调 drawio CLI `--export` | 1949 行 | `check_vizspec.py`、`validate_drawio.py`，4 个单测 |
-| **F. 直接 OOXML 模板（无脚本）** | legal-proposal-generator、litigation-analysis 等只出 Markdown，Word 转换交给 A | — | 0 | 无 |
+| **F. 直接 OOXML 模板（无脚本）** | legal-proposal-generator、litigation-analysis 等只出 Markdown，Word 转换交给 A | 无 | 0 | 无 |
 
 CHANGELOG/复盘里记录的返工与事故（原文）：
 - ECG 五轮返工：`references/qa-checklist.md` L10「250612 案（22-著作权案由）连续 5 轮返工，以下每一条都是实际踩过的坑」；L24「v1.1 勘误（2026-08-28）：v1 所记"法院发放件实宽约 7008"实测有误……据此衍生出的"缩表到 7008"修补路线是错的」。
 - ECG `CHANGELOG.md` 0.14.0「几何修复（推翻 v0.13 的 1800 边距归一）……根因：归一后可用 8306 < 表宽 9344 → 溢出 → 催生"缩表 7008"错误修补路线」；0.13.3「模板 footer 用 `<w:t>351</w:t>` 等硬编码页码，渲染后永远显示 351」。
 - md2word 三次回退（见第六节）。
-- contract-copilot：RETROSPECTIVE L96「DEC-039：时间线只能从命令执行时点向后顺延——修正了『客户中午给合同，Word 却显示上午已审完』的穿帮」；L97「DEC-042：w:date 改用本机本地时区写入……否则客户 Word 里会显示成美国时间」。
+- contract-copilot：RETROSPECTIVE L96「DEC-039：时间线只能从命令执行时点向后顺延，修正了『客户中午给合同，Word 却显示上午已审完』的穿帮」；L97「DEC-042：w:date 改用本机本地时区写入……否则客户 Word 里会显示成美国时间」。
 - legal-industry-report `CHANGELOG.md` L263（0.6.2，2026-08-25）「之前"封面没渲染成功"的印象,根因是 v0.6.0 早期版本封面 CSS 注入丢失 + 章节内容被静默裁切」。
 
 ---
@@ -233,7 +235,7 @@ CHANGELOG/复盘里记录的返工与事故（原文）：
 ## 五、案件状态与目录管理
 
 - **建档**：new-case 按 `assets/{litigation,consultation,trademark,patent}.yaml` 预设建目录（诉讼 12 目录「00 - 日程管理」至「11 - 参考文件」，`SKILL.md` L90），生成「案件信息看板、工时记录和期限管理文件」（L13）；材料编号「A-001（活文档）、B-001（常查）、C-001（存档）、D-001（待激活）」（L18）；操作铁律「复制/移动文件时必须用 cp -p」（L195）。
-- **数据模型**：`skills/case-progress/references/schema.md`「case.yaml v4.0 字段字典（唯一权威契约）」，16 节：meta、案件基本信息、当事人与代理、法定期限（list）、任务（list，「唯一任务真源」）、时间线、证据索引、费用、争议焦点索引、工时统计、上下文指针、同步、审级记录、开庭与听证、扩展信息、更新历史（L36-L219）。「行键（稳定身份）：列表行的身份用业务键，不用数组下标——AI 重排后人工修改不错位」（L20）。
+- **数据模型**：`skills/case-progress/references/schema.md`「case.yaml v4.0 字段字典（唯一权威契约）」，16 节：meta、案件基本信息、当事人与代理、法定期限（list）、任务（list，「唯一任务真源」）、时间线、证据索引、费用、争议焦点索引、工时统计、上下文指针、同步、审级记录、开庭与听证、扩展信息、更新历史（L36-L219）。「行键（稳定身份）：列表行的身份用业务键，不用数组下标，AI 重排后人工修改不错位」（L20）。
 - **写入引擎**：`scripts/case_store.py` CLI（show/list/add-task/set-status/add-deadline/set-stage/set-fields/validate/migrate/render/log-work/extract/scan）；每次写入「自动刷新已存在的视图文件」（`SKILL.md` L19）生成 `案件视图.md/.html`；「写入采用整文件 dump，yaml 注释不保留」（`case_store.py` L29）。
 - **人工内容保护**：「行级 `source: user|ai`；AI 永不覆写 source=user 的行；`生命周期状态=已结案` 仅手工标记；`程序阶段锁定=true` 时 AI 不得改写程序阶段」（`schema.md` L13）；代码 L417「程序阶段已锁定，AI 不得改写（律师可用 --actor user --unlock 解锁）」、L422「加锁属律师操作」；`_deep_merge` 合并后「source 保护与校验已过」（L1863）。并发保护：`<case.yaml>.lock` + `fcntl.flock`（L143-L155），`CHANGELOG.md` 0.3.0「首版仅锁写入瞬间，并发测试 1/5 暴露丢失更新，修复后 5/5」。
 - **看板**：case-dashboard 零依赖 HTTP 服务（端口 7879）+ 单文件 HTML，「一切对 case.yaml 的写入经 case-progress skill 的 case_store CLI」（`SKILL.md` L28）；`/dashboard --review` 周研判（L19）。
@@ -245,16 +247,16 @@ CHANGELOG/复盘里记录的返工与事故（原文）：
 ## 六、仓库自述的教训（作者原文）
 
 1. 2026-08-27/28，ECG `references/qa-checklist.md` L10「连续 5 轮返工」；L18-L20 把问题归为「入库模板库 / 渲染引擎 / 人工 XML 修补」三源，L73「修改在 /tmp 完成并通过步骤 6 后一次性覆盖目标件；禁止对目标件多轮就地覆写」。
-2. 2026-08-28，同文件 L24「v1 所记……实测有误……正确做法：保 9344 表宽 + 收窄页边距」——自己写的 QA 清单第二天就勘误。
-3. 2026-08-17，ECG `CHANGELOG.md` 0.6.0「叠加顺序：案由特定规则在前、通用层在后——通用勾选先跑会把"包含□"变 ☑ 致特定重写规则锚失效（24 实测踩坑，DEC-007）」；0.5.0「标题锚定位（occurrence 与段非 1:1 时错位的教训）」。
+2. 2026-08-28，同文件 L24「v1 所记……实测有误……正确做法：保 9344 表宽 + 收窄页边距」，自己写的 QA 清单第二天就勘误。
+3. 2026-08-17，ECG `CHANGELOG.md` 0.6.0「叠加顺序：案由特定规则在前、通用层在后，通用勾选先跑会把"包含□"变 ☑ 致特定重写规则锚失效（24 实测踩坑，DEC-007）」；0.5.0「标题锚定位（occurrence 与段非 1:1 时错位的教训）」。
 4. 2026-07-14，md2word `CHANGELOG.md` 1.1.7「### 回退 列宽算法回退到 v1.1.5 旧版（DEC-008）：v1.1.6 的"短/中/长三分类自适应"导致部分表格列宽被过度拉长，作者反馈不满意」。
-5. 2026-08-05，md2word 1.2.0「### 回退 恢复外链图片默认下载（作者确认）：撤销 v1.1.9 的 `--allow-remote-images` 开关」——同一天上午加安全开关、当天回退。
+5. 2026-08-05，md2word 1.2.0「### 回退 恢复外链图片默认下载（作者确认）：撤销 v1.1.9 的 `--allow-remote-images` 开关」，同一天上午加安全开关、当天回退。
 6. 2026-08-11，md2word 1.2.1「### 回退 book-publish 代码字体 JetBrains Mono → Courier New……md2word 不做字体嵌入、依赖印刷厂 Windows 字体库」。
 7. 2026-08-25，legal-industry-report 0.4.1「### 回退 律所引言章 motto 暂不启用(DEC-IR-011):应用户反馈"各家律所引言差异大,先不显示"」；legal-client-brief 0.3.1 同步回退。
 8. 2026-08-06，legal-case-analysis 0.4.0「方向性调整：脱敏从「P0 强制项」降级为「场景化可选 + 安全底线」。办案场景下材料本要提交法院/客户……强制脱敏反而失真」。
 9. 2026-08-05，legal-case-analysis 0.3.4「竞赛原始材料包（赛题材料/、法律检索存档/）已丢失」。
 10. 2026-08-14，case-progress 0.3.0「首版仅锁写入瞬间，并发测试 1/5 暴露丢失更新，修复后 5/5，见 DEC-008」。
-11. 2026-08-17，course-generator 2.7.4「华商 2.7.3 实测暴露两类执行失败——7 章正文一张配图都没插（注意力被"讲者归零"吸走……）」；2.7.2「去来源痕迹把承载在框架词里的工具功能细节……连坐删除」。
+11. 2026-08-17，course-generator 2.7.4「华商 2.7.3 实测暴露两类执行失败，7 章正文一张配图都没插（注意力被"讲者归零"吸走……）」；2.7.2「去来源痕迹把承载在框架词里的工具功能细节……连坐删除」。
 12. 2026-06-30，git-workflow 1.4.2「`--merged main` 两方向都不可靠……来自 book repo 误删活跃 deai 分支的实战教训」。
 13. 2026-09-01，multi-agent-orchestration 2.11.0「删除 claude-code `--bare` 自动降级……撤销 v1.20.2 Task-019……不再静默降级 prompt-only」；2.10.3「2026-09-01 custom-skills 实测事故……Orca 模式被静默降级为 tmux」；2.14.2（2026-09-03）「真实事故：……`pm-monitor` 把……仍存活的 session 报为 SESSION_GONE」；2.9.2.1「2026-08-28 三波撞号教训」。
 14. verification-gate `references/lessons-from-practice.md` 13 条：教训 10「NOT_VERIFIED 整批移交用户 = 反模式」、教训 11「测试套件「永不完成」比「测试失败」更危险……立即暴露 3 条被掩盖数周的真实失败」（2026-08-14）、教训 13「chromium 全绿 ≠ WKWebView 过」。

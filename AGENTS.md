@@ -7,6 +7,16 @@
 1. **案件材料永不入本仓库**：真实案件材料只存在于仓库外的案件工作区（`D:\Claude\Data\Cases\`）；仓库内所有案件引用只指向外部路径；案件敏感信息不得写入 issue、commit message；机械守门（隐私钩子）见 `docs/adr/0014`。
 2. **办案会话对本仓库只读**：在案件目录上工作的会话不写本仓库（含 `knowledge/`）；判为通用的裁定由开发会话誊入，入库须经第二双眼；案件图里的模块与节点回流领域图的机制见 `docs/adr/0012`。
 
+## 结构不变量（理由在 ADR-0009）
+
+1. **登记**：每件 skill 同时出现在 `skills/<name>/`、`.claude-plugin/plugin.json` 的 `skills` 数组、`README.md` 两组之一；`name` 只用小写字母、数字、连字符且带 `loo0ng-` 前缀；`SKILL.md` 不带 BOM。
+2. **路由入口表同步**：增删或改名任一入口，必改 `ask-loo0ng` 自持的入口表。
+3. **双旗同步**：编排 skill 与路由同时带 `disable-model-invocation: true` 与 `allow_implicit_invocation: false`；参考 skill 两者都不带。
+4. **relink**：改名、增删 skill 后重跑 `scripts/link-skills.ps1`。
+5. **领域目录三样**：`skills/loo0ng-domain/assets/` 只有领域图、官方模板原件、指引手册原文（ADR-0004）。
+
+长约定见 `docs/agents/skills.md`。
+
 ## 本文件写什么
 
 本文件每轮整篇进上下文，只装三种东西：硬边界；违反了产品就坏的结构不变量（每条一行，理由在 `docs/adr/`）；指向长约定的一行指针。对模型行为的要求不写在这里：事故的教训在发布时经空话检验后写进它所属 skill 的正文。结构不变量随 `skills/` 目录建立时写入。依据 ADR-0009 与 `docs/research/AGENTS-md-该写什么.md`。

@@ -1,7 +1,9 @@
 # Claude Code 与 Codex 的 skill 分发与调用控制现状
 
+> 引文里的破折号已按全仓禁破折号的规则改为逗号或冒号，其余逐字。
+
 > **写于** 2026-09-04，对应 issue #11（`wayfinder:research`），供 #7「路由的定位机制」、#9「编排层与参考层的 skill 清单」、#10「图存档与可视化接口」参考。
-> **来源等级**：只读官方一手来源——Claude Code 文档（code.claude.com / platform.claude.com）、Anthropic `anthropics/skills` 仓库、OpenAI Codex 文档（`developers.openai.com/codex/*` 现 308 跳转到 `learn.chatgpt.com/docs/*`，二者同为官方站）、`openai/codex` 仓库源码与 issue、MCP 规范与 `modelcontextprotocol/ext-apps`、OpenAI Apps SDK 文档。未克隆任何外部仓库，全部经网页读取。所有 URL 访问日期均为 2026-09-04，下文不再逐条重复。
+> **来源等级**：只读官方一手来源，Claude Code 文档（code.claude.com / platform.claude.com）、Anthropic `anthropics/skills` 仓库、OpenAI Codex 文档（`developers.openai.com/codex/*` 现 308 跳转到 `learn.chatgpt.com/docs/*`，二者同为官方站）、`openai/codex` 仓库源码与 issue、MCP 规范与 `modelcontextprotocol/ext-apps`、OpenAI Apps SDK 文档。未克隆任何外部仓库，全部经网页读取。所有 URL 访问日期均为 2026-09-04，下文不再逐条重复。
 > **带入的已知事实**（不重推）：2.0 在 Codex 侧用 `~/.agents/skills` 下的 junction 挂 skill、用 MCP server 出图（`docs/3.0-handoff.md` §6）；Windows 下 symlink 双注册（`.claude/skills -> ../skills`、`.agents/skills -> ../skills`）曾表现为空目录（`docs/research/legal-skills-与本项目交叉对比.md` §1.1）。
 > **标注**：凡官方文档未直接写明、由源码或 issue 推断的，标 **推测**。GitHub issue 是用户报告，不是官方声明，只作旁证。
 > **红线**：不含任何案件材料。
@@ -42,7 +44,7 @@
 - 项目级「从启动目录的 `.claude/skills/` 以及**每一级父目录直到仓库根**加载」。启动目录**以下**的嵌套 `.claude/skills/` 不在启动时加载，「第一次读或改该子目录内文件时才加载」，之前不出现在补全里也不能按名调用。
 - `--add-dir` / `/add-dir` / SDK `additionalDirectories` 会加载该目录的 `.claude/skills/` 与 `.claude/commands/`；但 **`settings.json` 里的 `permissions.additionalDirectories` 只授文件权限、不加载 skill**（同名不同效）。
 - 会话内热更新：监视 `~/.claude/skills/`、项目 `.claude/skills/` 与 add-dir 内的 `.claude/skills/`，改 `SKILL.md` 即生效；新建顶层 skills 目录要重启。
-- **symlink**：「enterprise、personal、project 位置下的 `<skill-name>` 条目可以是指向磁盘他处目录的 symlink。Claude Code 跟随 symlink 读取目标的 `SKILL.md`；同一目标从多处可达时只加载一次。」插件侧另有规则（见 1.3）。文档没有任何关于 Windows junction 的说法——**未找到**。
+- **symlink**：「enterprise、personal、project 位置下的 `<skill-name>` 条目可以是指向磁盘他处目录的 symlink。Claude Code 跟随 symlink 读取目标的 `SKILL.md`；同一目标从多处可达时只加载一次。」插件侧另有规则（见 1.3）。文档没有任何关于 Windows junction 的说法，**未找到**。
 - 保留名：`synced`（任何大小写）保留给 claude.ai 同步的 skill。
 
 **优先级**（同页，原文）：「Across levels, enterprise overrides personal, and personal overrides project.」即个人 `~/.claude/skills/deploy` **压过**项目 `.claude/skills/deploy`，与 settings 的惯常方向相反。插件 skill 走 `plugin-name:skill-name` 命名空间，「不会与其他级别冲突」。同名 skill 与 `.claude/commands/*.md` 并存时 skill 优先。嵌套目录同名时两者都保留，嵌套的得到目录限定名 `apps/web:deploy`。
@@ -59,18 +61,18 @@
 
 | 范围 | 路径 |
 | --- | --- |
-| REPO | `$CWD/.agents/skills`、`$CWD/../.agents/skills`、`$REPO_ROOT/.agents/skills`——「从当前工作目录向上到仓库根的每一级目录都扫 `.agents/skills`」 |
+| REPO | `$CWD/.agents/skills`、`$CWD/../.agents/skills`、`$REPO_ROOT/.agents/skills`，「从当前工作目录向上到仓库根的每一级目录都扫 `.agents/skills`」 |
 | USER | `$HOME/.agents/skills` |
 | ADMIN | `/etc/codex/skills` |
 | SYSTEM | 随 Codex 内置 |
 
-- 源码 `codex-rs/core/src/skills.rs` 的 `SkillScope { User, Repo, System, Admin }` 与此对应。`$CODEX_HOME/skills`（`~/.codex/skills`）只作内置 SYSTEM skill 的落盘缓存（`codex-rs/skills/src/lib.rs` `install_system_skills()` 装到 `CODEX_HOME/skills/.system`）。issue [#22590](https://github.com/openai/codex/issues/22590)「支持 `.codex/skills` 作为发现目录」被关闭为 not planned——**`~/.codex/skills` 不是用户发现根**。
+- 源码 `codex-rs/core/src/skills.rs` 的 `SkillScope { User, Repo, System, Admin }` 与此对应。`$CODEX_HOME/skills`（`~/.codex/skills`）只作内置 SYSTEM skill 的落盘缓存（`codex-rs/skills/src/lib.rs` `install_system_skills()` 装到 `CODEX_HOME/skills/.system`）。issue [#22590](https://github.com/openai/codex/issues/22590)「支持 `.codex/skills` 作为发现目录」被关闭为 not planned，**`~/.codex/skills` 不是用户发现根**。
 - **不读 `.claude/skills`**：官方文档与 skills crate 源码均无此路径。
 - 目录布局：`SKILL.md`（必需）+ `scripts/`、`references/`、`assets/`（可选）+ `agents/openai.yaml`（可选，外观与依赖）。
 - symlink：文档原文「Codex supports symlinked skill folders and follows the symlink target when scanning these locations.」但 issue [#11314](https://github.com/openai/codex/issues/11314)「`.agents/skills` 本身是 symlink 时不加载」关闭为 not planned；[#8400](https://github.com/openai/codex/issues/8400)「Windows 下 symlink 或 junction 的 skill 不被检测」（标签 `windows-os`）关闭为 #8369 的重复。**推测**：跟随的是 `.agents/skills` 真实目录**之内**的 symlink 条目，`.agents/skills` **根本身**为链接则不保证；Windows 上 junction 有用户报告失败。
-- 递归扫描：issue [#22275](https://github.com/openai/codex/issues/22275) 报告 skill 包内嵌套的 `SKILL.md` 被当独立 skill 注册——**推测**扫描是递归的且无深度限制。入口文件名大小写敏感（issue [#20637](https://github.com/openai/codex/issues/20637)，**推测**）。
+- 递归扫描：issue [#22275](https://github.com/openai/codex/issues/22275) 报告 skill 包内嵌套的 `SKILL.md` 被当独立 skill 注册，**推测**扫描是递归的且无深度限制。入口文件名大小写敏感（issue [#20637](https://github.com/openai/codex/issues/20637)，**推测**）。
 
-**优先级 / 去重**（原文）：「If two skills share the same `name`, Codex doesn't merge them; both can appear in skill selectors.」源码 `codex-rs/skills/src/selection.rs` 按 `path_to_skills_md` 去重，`$name` 匹配到多个候选时直接跳过（`if skill_count != 1 || connector_count != 0 { continue; }`）。范围间的具体覆盖规则**未核实**——文档只承诺不合并。
+**优先级 / 去重**（原文）：「If two skills share the same `name`, Codex doesn't merge them; both can appear in skill selectors.」源码 `codex-rs/skills/src/selection.rs` 按 `path_to_skills_md` 去重，`$name` 匹配到多个候选时直接跳过（`if skill_count != 1 || connector_count != 0 { continue; }`）。范围间的具体覆盖规则**未核实**：文档只承诺不合并。
 
 **进入上下文的内容**（原文）：「ChatGPT and Codex start with each skill's name and description, then load the full `SKILL.md` instructions when they decide to use that skill.」「In Codex, the initial list also includes each skill's file path. …this list uses at most 2% of the model's context window, or 8,000 characters when the context window is unknown. If many skills are installed, Codex shortens skill descriptions first. For large skill sets, Codex may omit some skills from the initial list and show a warning.」配置项 `skills.max_context_tokens`「显式值上限 10,000 token」（[config-reference](https://learn.chatgpt.com/docs/config-file/config-reference.md)、`codex-rs/config/src/skills_config.rs`）。
 
@@ -138,7 +140,7 @@ policy:
 
 与 Claude Code 的差异（重要）：
 1. **描述是否还在列表里**：文档只说「不隐式调用」，没说从可用 skill 列表移除。**推测**：name/description/path 仍进初始列表（否则 `$name` 补全无从来）；Claude Code 则是整体从上下文移除。
-2. **执行位置**：Claude Code 在 Skill tool 调用处硬拦；Codex 是选择阶段不隐式选（`detect_implicit_skill_invocation()`），模型读到列表后能否绕过——**未核实**。
+2. **执行位置**：Claude Code 在 Skill tool 调用处硬拦；Codex 是选择阶段不隐式选（`detect_implicit_skill_invocation()`），模型读到列表后能否绕过，**未核实**。
 3. **反向控制**：Codex **没有** `user-invocable: false` 等价物，也没有「常驻 / pinned」skill；全局只有 `skills.include_instructions` 开关。
 4. Codex `parser.rs` 无 `deny_unknown_fields`，所以 SKILL.md 里写 `disable-model-invocation: true` **不报错、也不生效**，静默忽略；反之 Claude Code 也不读 `agents/openai.yaml`。两边控制项必须**各写一份**。
 
@@ -161,7 +163,7 @@ policy:
 - **frontmatter**：`name`、`description` 两边都读；`description` ≤ 1,024 字、第三人称、含功能 + 触发条件 + 负向条件（Anthropic 最佳实践）。Codex 额外读 `metadata.short-description`（kebab-case）；Claude Code 把 `metadata` 当自由映射不动作，所以这个键两边都安全。
 - **Claude Code 扩展字段**（`disable-model-invocation`、`user-invocable`、`allowed-tools`、`argument-hint`、`context`、`paths`、`when_to_use`、`model`、`effort`、`hooks`、`shell`…）在 Codex 被静默忽略，**不会**破坏加载；但会让该 SKILL.md 在 claude.ai 上传 / Skills API / `package_skill.py` 处报硬错误。本项目不走那三条路，可以照用；若日后要上传 claude.ai，只能保留六字段。
 - **正文**：Claude Code 独有的 `!`cmd`` 动态注入、`$ARGUMENTS`、`${CLAUDE_SKILL_DIR}` 在 Codex 里是普通文本。Codex 提供的是文件路径（列表含 path），脚本引用宜写相对于 SKILL.md 的路径并用正斜杠（Anthropic 最佳实践「Always use forward slashes in file paths, even on Windows」）。**推测**：正文用「本目录的 `scripts/x.py`」这类相对措辞，两边都能落。
-- **`agents/openai.yaml`**：Claude Code 不认识 `agents/` 子目录里的 yaml（它的 `agents/` 概念在插件根，文件是 `.md`），放在 skill 内无副作用——**推测**，未在文档见到相反说明。
+- **`agents/openai.yaml`**：Claude Code 不认识 `agents/` 子目录里的 yaml（它的 `agents/` 概念在插件根，文件是 `.md`），放在 skill 内无副作用，**推测**，未在文档见到相反说明。
 
 ### 3.2 分发：两套目录，不共享同一棵树
 
@@ -173,11 +175,11 @@ policy:
 | marketplace | `.claude-plugin/marketplace.json` | `.agents/plugins/marketplace.json` |
 
 两边互不读对方目录（§1.1、§1.2）。把一份 `skills/` 树同时暴露给两边只有三条路：
-1. **symlink / junction**：Claude Code 明确支持 skill 条目级 symlink 并去重；Codex 文档说支持但 Windows 上有 junction 失败的用户报告（#8400），且 `.agents/skills` 根本身为链接不保证（#11314）。带入的两条已知事实与此一致：2.0 的 `~/.agents/skills` junction 是**条目级**（11 个各指一个 skill），能工作；legal-skills 的 `.claude/skills -> ../skills` 是**根级** symlink，在 Windows 克隆下是空目录（git 在 Windows 默认不建 symlink，是 git 侧问题，与两平台无关——**推测**）。
+1. **symlink / junction**：Claude Code 明确支持 skill 条目级 symlink 并去重；Codex 文档说支持但 Windows 上有 junction 失败的用户报告（#8400），且 `.agents/skills` 根本身为链接不保证（#11314）。带入的两条已知事实与此一致：2.0 的 `~/.agents/skills` junction 是**条目级**（11 个各指一个 skill），能工作；legal-skills 的 `.claude/skills -> ../skills` 是**根级** symlink，在 Windows 克隆下是空目录（git 在 Windows 默认不建 symlink，是 git 侧问题，与两平台无关，**推测**）。
 2. **复制**：把同一 skill 包分别放进两棵树，靠脚本同步。最稳，代价是双份。
 3. **插件**：Claude Code 插件 + Codex 插件各写一份清单指向同一 `skills/`；Claude 插件缓存时会解引用 marketplace 内 symlink、跳过外部 symlink（§1.3）。
 
-`.claude-plugin/` 与 `.codex-plugin/` 可以并存于同一插件根，各指 `./skills/`——**推测**，两边文档都没有禁止，也没有说明互相忽略；需实测。
+`.claude-plugin/` 与 `.codex-plugin/` 可以并存于同一插件根，各指 `./skills/`，**推测**，两边文档都没有禁止，也没有说明互相忽略；需实测。
 
 ### 3.3 编排层 / 参考层在两边怎么落
 
@@ -221,8 +223,8 @@ policy:
 
 ### 4.2 哪些宿主渲染
 
-- 官方[客户端矩阵](https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/main/docs/extensions/client-matrix.mdx)（社区维护）列出 Claude (web)、Claude Desktop、VS Code Copilot、M365 Copilot、Goose、Postman、MCPJam、ChatGPT、Cursor 等；**Claude Code 不在列，Codex 未提及**。Anthropic 帮助中心「interactive connectors」可用面：Claude、Cowork、Claude Desktop、iOS/Android——**无 Claude Code**。
-- **Claude Code**：[MCP 页](https://code.claude.com/docs/en/mcp) 只有 tools（输出上限 25,000 token，`MAX_MCP_OUTPUT_TOKENS` / `_meta["anthropic/maxResultSizeChars"]` 可调）、resources（`@server:resource` 提及，**部分核实**——搜索索引可见、页面锚点抓取截断）、prompts 作 `/` 命令、OAuth、`.mcp.json` 项目级配置；**无任何 UI / HTML / widget 渲染条目**。
+- 官方[客户端矩阵](https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/main/docs/extensions/client-matrix.mdx)（社区维护）列出 Claude (web)、Claude Desktop、VS Code Copilot、M365 Copilot、Goose、Postman、MCPJam、ChatGPT、Cursor 等；**Claude Code 不在列，Codex 未提及**。Anthropic 帮助中心「interactive connectors」可用面：Claude、Cowork、Claude Desktop、iOS/Android，**无 Claude Code**。
+- **Claude Code**：[MCP 页](https://code.claude.com/docs/en/mcp) 只有 tools（输出上限 25,000 token，`MAX_MCP_OUTPUT_TOKENS` / `_meta["anthropic/maxResultSizeChars"]` 可调）、resources（`@server:resource` 提及，**部分核实**：搜索索引可见、页面锚点抓取截断）、prompts 作 `/` 命令、OAuth、`.mcp.json` 项目级配置；**无任何 UI / HTML / widget 渲染条目**。
 - **Codex**：[MCP 页](https://learn.chatgpt.com/docs/extend/mcp.md) 支持项只有三条：STDIO、Streamable HTTP、server `instructions`；resources/prompts/UI 不在列。源码 `codex-rs/features/src/lib.rs` 有 **`EnableMcpApps`「Enable MCP apps」默认 `false`**；issue [#21019](https://github.com/openai/codex/issues/21019) 报告 Desktop 收到 `ui://` 资源仍只显示文本、不发 `resources/read`。对应 TOML 键**推测**为 `features.enable_mcp_apps`，未见于配置参考。Apps SDK 文档明说「Keep the MCP tools useful without a component so ChatGPT and Codex can complete the workflow without UI.」
 - **OpenAI Apps SDK** 已收敛到 MCP Apps：「ChatGPT implements the open MCP Apps standard」，`_meta["openai/outputTemplate"]` 是 `_meta.ui.resourceUri` 的兼容别名，`window.openai.toolOutput` 对应 `ui/notifications/tool-result`，`text/html+skybridge` 为旧 MIME（新作用 `text/html;profile=mcp-app`；是否正式弃用**未核实**）。这套只对 ChatGPT，不对 Codex。
 
@@ -233,10 +235,10 @@ policy:
 ### 4.4 对本项目的形状结论
 
 一个本地图谱 MCP server 若按标准写一次：
-- 工具 `_meta.ui.resourceUri: "ui://<server>/graph"`；资源 `ui://<server>/graph` 为 `text/html;profile=mcp-app` 的自包含 HTML（CSP 默认 `connect-src 'none'`，图数据只能从 `structuredContent` 拿，不能自己回连本地端口——除非 `csp.connectDomains` 声明）；
+- 工具 `_meta.ui.resourceUri: "ui://<server>/graph"`；资源 `ui://<server>/graph` 为 `text/html;profile=mcp-app` 的自包含 HTML（CSP 默认 `connect-src 'none'`，图数据只能从 `structuredContent` 拿，不能自己回连本地端口，除非 `csp.connectDomains` 声明）；
 - 工具结果 `structuredContent` 装图（例如 `{nodes:[…], edges:[…], meta:{…}}`，由 `outputSchema` 声明），`content` 装模型可读摘要。
 
-这份产物在 Claude.ai / Claude Desktop / ChatGPT / VS Code 里出 iframe；在 **Claude Code 与 Codex CLI 里按规范降级为文本**——两个本项目实际使用的宿主目前都不渲染。所以 #10 的决策空间是：(i) 图存档本身就是 `structuredContent` 那份 JSON，MCP server 只是搬运；(ii) 会话内可视化在两个 CLI 宿主里暂不可得，落盘 HTML 快照（2.0 的第二出口）仍是唯一「律师看得见」的通道，除非换宿主（Claude Desktop 等）——**这是一个事实约束，不是推荐**；(iii) Codex 的 `EnableMcpApps` 旗标存在，说明方向在走，但默认关。
+这份产物在 Claude.ai / Claude Desktop / ChatGPT / VS Code 里出 iframe；在 **Claude Code 与 Codex CLI 里按规范降级为文本**：两个本项目实际使用的宿主目前都不渲染。所以 #10 的决策空间是：(i) 图存档本身就是 `structuredContent` 那份 JSON，MCP server 只是搬运；(ii) 会话内可视化在两个 CLI 宿主里暂不可得，落盘 HTML 快照（2.0 的第二出口）仍是唯一「律师看得见」的通道，除非换宿主（Claude Desktop 等），**这是一个事实约束，不是推荐**；(iii) Codex 的 `EnableMcpApps` 旗标存在，说明方向在走，但默认关。
 
 ---
 

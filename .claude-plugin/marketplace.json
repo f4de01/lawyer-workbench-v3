@@ -1,0 +1,21 @@
+{
+  "name": "loo0ng-marketplace",
+  "owner": {
+    "name": "loong"
+  },
+  "description": "律师工作台 3.0 的单插件市场：仓库自成市场，装 loo0ng-skills 一件插件。",
+  "plugins": [
+    {
+      "name": "loo0ng-skills",
+      "source": "./",
+      "description": "律师工作台 3.0：破产业务先行的法律工作台，两个入口加一个路由，四个参考 skill 由模型自行够到。",
+      "category": "productivity",
+      "keywords": [
+        "legal",
+        "bankruptcy",
+        "skills",
+        "workbench"
+      ]
+    }
+  ]
+}

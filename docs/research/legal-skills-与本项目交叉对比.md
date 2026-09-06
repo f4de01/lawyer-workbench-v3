@@ -36,13 +36,13 @@ description 纪律（handoff §4「不变量 4、5、7 沿用」）：legal-skil
 
 - **本项目侧**：6 个 user-invoked skill + 4 个律师动作脚本，每个再分 `--show`/`--commit` 两段；「批准即确认」与「两段式执行」互相抵消（handoff §2.1）。
 - **legal-skills 侧**：律师面对自然语言触发；`case-progress` 的 CLI 有 12 个子命令但由模型调用，律师不直接敲（§五）。**确认点被数据保护替代**：行级 `source: user|ai`，「AI 永不覆写 source=user 的行」；`程序阶段锁定=true` 时 AI 不得改写，解锁「属律师操作」，代码里直接 `die`（§五、§七优点 6）。
-- **判断**：**借鉴思路**——把「律师发起权四项」从对话确认改为数据层保护：律师写过的东西 AI 永不覆盖，于是 AI 可以放手写、不必每步问。这直接对应 handoff §4「发起权归律师保留，两段式脚本形态重裁」。**避雷**：legal-skills 没有定义过「律师一天的主循环」，`EXPERT-SUITE-DESIGN.md` 是 skill 套件视角（§一），与本项目 2.0 一样是能力正推，不能当主循环样板。落「律师主循环」票。
+- **判断**：**借鉴思路**：把「律师发起权四项」从对话确认改为数据层保护：律师写过的东西 AI 永不覆盖，于是 AI 可以放手写、不必每步问。这直接对应 handoff §4「发起权归律师保留，两段式脚本形态重裁」。**避雷**：legal-skills 没有定义过「律师一天的主循环」，`EXPERT-SUITE-DESIGN.md` 是 skill 套件视角（§一），与本项目 2.0 一样是能力正推，不能当主循环样板。落「律师主循环」票。
 
 ### 1.3 handoff §2.2：可见工作台的呈现形态
 
 - **本项目侧**：网页 → 插件 → MCP widget + HTML 快照，律师期望官方 MCP 格式或 app（handoff §2.2）。
 - **legal-skills 侧**：`case-dashboard` 是本地 HTTP 服务（7879 端口）+ 单文件 HTML，纯派生视图，「一切写入经 case-progress 的 CLI」；每次写入自动刷新 `案件视图.md/.html`（§五）。没有 MCP 形态。
-- **判断**：只提供一个数据点——看板是派生视图、不承载状态，这与本项目 2.0 ADR-0003「快照不承载图谱数据」方向一致，handoff 已判「机制本身没出事」。对 MCP/app 之争 legal-skills **无关**。落「呈现形态」票作旁证。
+- **判断**：只提供一个数据点，看板是派生视图、不承载状态，这与本项目 2.0 ADR-0003「快照不承载图谱数据」方向一致，handoff 已判「机制本身没出事」。对 MCP/app 之争 legal-skills **无关**。落「呈现形态」票作旁证。
 
 ### 1.4 handoff §2.3：文书生成机制
 
@@ -82,7 +82,7 @@ legal-skills 在 B 路线上走到「连续 5 轮返工」、QA 清单**次日**
 ### 1.6 handoff §3：两条硬边界
 
 **边界 1 案件材料永不入仓库**：
-- legal-skills 有版本化 `.githooks/pre-commit`，硬拦手机号、18 位身份证、座机、`/Users/` 绝对路径、真实法院案号（正则已含「破」字号），外加本地黑名单 `local-denylist`「绝不入库——黑名单放公开仓库等于二次泄露」（§1.7）。
+- legal-skills 有版本化 `.githooks/pre-commit`，硬拦手机号、18 位身份证、座机、`/Users/` 绝对路径、真实法院案号（正则已含「破」字号），外加本地黑名单 `local-denylist`「绝不入库，黑名单放公开仓库等于二次泄露」（§1.7）。
 - 但 legal-skills 自己的 `.claude/settings.local.json` 入库且含本机绝对路径，`elements-complaint-generator/SKILL.md` 含真实当事人姓名（§七可疑 2、3）。说明正则钩子挡不住姓名，也挡不住 `--no-verify`。
 - **借鉴**：移植这个钩子，把绝对路径模式改成本机路径与 `D:\Claude\Data\Cases\`；敏感词表放仓库外，与本项目硬边界 1「敏感词表只存在于案件工作区」设计相同。**避雷**：钩子是机械保障，不替代「第二双眼」。
 
@@ -123,16 +123,16 @@ legal-skills 在 B 路线上走到「连续 5 轮返工」、QA 清单**次日**
 | --- | --- | --- | --- | --- |
 | J1 | 独立版式门禁：只读、不改产物、fail-closed、真实渲染 | `elements-complaint-generator/scripts/layout_gate.py`；独立调研 §2.1、§四 | 文书生成机制票；检查项 = 裁定台账 #8–#11 五种事故 + 残留第三方信息 | 渲染后端先在 Windows 本机验证 |
 | J2 | 默认出件 = 模型写全文 → 通用转换器 | `md2word` 作为法律 skill 默认后端；§四 A | 文书生成机制票（方向本来自 handoff §2.3） | 转换器关网络 |
-| J3 | 行级 `source: user` 保护替代对话确认 | `case-progress` schema L13、`case_store.py` L417–422；§五 | 律师主循环票、案件目录票 | — |
+| J3 | 行级 `source: user` 保护替代对话确认 | `case-progress` schema L13、`case_store.py` L417–422；§五 | 律师主循环票、案件目录票 | 无 |
 | J4 | 目录规范写成 YAML 预设 | `new-case/assets/*.yaml`；§五 | 案件目录票 | 只做一份破产预设 |
 | J5 | 单一写入引擎 + 校验 + 原子写 + 派生视图自动刷新 | `case_store.py`；§五 | 案件目录票 | 锁要自己写 Windows 版 |
-| J6 | 迁移写成处置表 | `case-progress/references/schema.md` §3–4；§五 | 案件目录票（回放案迁移） | — |
+| J6 | 迁移写成处置表 | `case-progress/references/schema.md` §3–4；§五 | 案件目录票（回放案迁移） | 无 |
 | J7 | pre-commit 隐私守门 + 仓库外黑名单 | `.githooks/pre-commit`；§1.7 | 硬边界 1 的机械保障 | 改路径模式；不替代第二双眼 |
-| J8 | 案件工作区显式发现，禁 `__file__.resolve()` | `case_store.py` L75；§2.3 | 硬边界 2 | — |
-| J9 | setup skill 骨架：受管区块 marker + dry-run + 三档完成状态 | `legal-harness-init`；§1.4 | harness 范围票 / setup skill 票 | — |
+| J8 | 案件工作区显式发现，禁 `__file__.resolve()` | `case_store.py` L75；§2.3 | 硬边界 2 | 无 |
+| J9 | setup skill 骨架：受管区块 marker + dry-run + 三档完成状态 | `legal-harness-init`；§1.4 | harness 范围票 / setup skill 票 | 无 |
 | J10 | description 四件：功能、触发、负向、邻居互指 | §1.3 好例 | 每张 skill 票的完成定义 | 不造 lint 工具 |
-| J11 | 规则带「被违反的那一次」的日期与出处 | 各 CHANGELOG「背景：实际使用中发现」；§六 | 规则元规则票 | — |
-| J12 | 打包时 `export-ignore` 剥离开发文件 | `.gitattributes` L16–17；§1.6 | 插件分发 | — |
+| J11 | 规则带「被违反的那一次」的日期与出处 | 各 CHANGELOG「背景：实际使用中发现」；§六 | 规则元规则票 | 无 |
+| J12 | 打包时 `export-ignore` 剥离开发文件 | `.gitattributes` L16–17；§1.6 | 插件分发 | 无 |
 
 ## 3. 避雷清单（本项目 3.0 要避开的）
 

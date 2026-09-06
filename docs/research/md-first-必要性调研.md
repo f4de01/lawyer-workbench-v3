@@ -1,7 +1,9 @@
 # 「先 Markdown 再 DOCX」中间层的必要性调研
 
+> 引文里的破折号已按全仓禁破折号的规则改为逗号或冒号，其余逐字。
+
 > **写于** 2026-09-05，供「文书出件机制与验收项」票参考。只查事实、给结论，不改任何已有文件、不做决策。
-> **来源等级**：一手来源优先——Anthropic `anthropics/skills` 仓库（含历史提交）、python-docx 官方文档与源码、docx-js 官方文档与源码、npm registry、GFM 规范、pandoc 手册；本仓库已核对材料（`docs/research/docx-backend-实测.md`（分支 `research/docx-backend`）、`docs/research/legal-skills-独立调研.md`、`docs/research/legal-skills-与本项目交叉对比.md` §1.4、`knowledge/通用裁定台账.md`、`docs/adr/0002-*.md`、`docs/research/skill-platforms-claude-code-与-codex.md`）；本机实验（第 4 节）。OOXML 规范引文取自 Microsoft Learn Open XML SDK 类文档所引的 ISO/IEC 29500-1 原文；Codex 事实取自 learn.chatgpt.com（developers.openai.com/codex/* 308 跳转至此）与 `openai/codex` 源码。所有 URL 访问日期均为 2026-09-05。
+> **来源等级**：一手来源优先，Anthropic `anthropics/skills` 仓库（含历史提交）、python-docx 官方文档与源码、docx-js 官方文档与源码、npm registry、GFM 规范、pandoc 手册；本仓库已核对材料（`docs/research/docx-backend-实测.md`（分支 `research/docx-backend`）、`docs/research/legal-skills-独立调研.md`、`docs/research/legal-skills-与本项目交叉对比.md` §1.4、`knowledge/通用裁定台账.md`、`docs/adr/0002-*.md`、`docs/research/skill-platforms-claude-code-与-codex.md`）；本机实验（第 4 节）。OOXML 规范引文取自 Microsoft Learn Open XML SDK 类文档所引的 ISO/IEC 29500-1 原文；Codex 事实取自 learn.chatgpt.com（developers.openai.com/codex/* 308 跳转至此）与 `openai/codex` 源码。所有 URL 访问日期均为 2026-09-05。
 > **红线**：不含任何案件材料；实验正文只用甲乙丙占位；模板原作者姓名不转录。
 
 ---
@@ -49,7 +51,7 @@
 | A | 开模板、清 body 只留 `sectPr`：A4、页边距、页脚 PAGE 域（模板 3-1）全部保留并渲出；字体按模板名写入 run（含 `w:eastAsia`）。python-docx 文档：「A lot of how a document looks is determined by the parts that are left when you delete all the content. Things like styles and page headers and footers are contained separately from the main content」。**合并单元格**：Markdown 管道表（GFM §4.10）没有跨行跨列语法；转换器当前不表达合并；但底层 python-docx `_Cell.merge()` 可产出与模板同形的 `<w:gridSpan w:val="2"/>`、`<w:vMerge w:val="restart"/>`、`<w:vMerge/>`（本机实验 1），即转换器加一条约定即可覆盖。列宽、行高沿用默认，与模板不一致。 | `docx-backend-实测.md` §一、§六；https://python-docx.readthedocs.io/en/latest/user/documents.html ；https://github.github.com/gfm/#tables-extension- ；https://python-docx.readthedocs.io/en/latest/api/table.html#docx.table._Cell.merge ；本机实验 1 |
 | B | 与 A 同库同能力；差别是每次由模型决定是否清 body、是否写 `eastAsia`、是否保留 `sectPr`。 | 同上 |
 | C | 模板原样保留一切（只改 `document.xml` 文本），合并单元格、页脚、字体天然保真；本机实验 3 输出 python-docx 可开、表格与页脚在。代价：`docProps/core.xml` 的模板原作者信息**也**原样保留（台账 #10 的事故来源），须另行清除。 | 本机实验 3；`knowledge/通用裁定台账.md` #10 |
-| D | `Document` 只能新建，「docx-js cannot open existing files」；`patchDocument` 只做 `{{占位符}}` 替换（「This algorithm is limited to one patch per text run」）。新建时可声明 A4（`size: {width: 11906, height: 16838}`）、边距、页脚 `PageNumber.CURRENT`（渲出 `fldChar begin/instrText PAGE/separate/end`）、`columnSpan`/`rowSpan`（渲出 gridSpan/vMerge）、`font: {ascii, hAnsi, eastAsia, cs}`——本机实验 4 全部验证，Word 渲染 1 页、页脚 "1"、PyMuPDF 检出 FangSong。但模板的样式表、列宽、行高、段落细节须由模型逐项在代码里复刻。`patchDocument` 空补丁往返官方模板 3-1：`sectPr`、vMerge、gridSpan 均保留，`document.xml` 仅 `mc:Ignorable` 多一个 `w15`，原作者信息保留（本机实验 5）。 | https://raw.githubusercontent.com/anthropics/skills/main/skills/docx/SKILL.md 第 14 行；https://raw.githubusercontent.com/dolanmiu/docx/master/docs/usage/patcher.md ；https://raw.githubusercontent.com/dolanmiu/docx/master/src/patcher/from-docx.ts ；https://raw.githubusercontent.com/dolanmiu/docx/master/docs/usage/tables.md ；https://raw.githubusercontent.com/dolanmiu/docx/master/src/file/paragraph/run/run-fonts.ts ；本机实验 4、5 |
+| D | `Document` 只能新建，「docx-js cannot open existing files」；`patchDocument` 只做 `{{占位符}}` 替换（「This algorithm is limited to one patch per text run」）。新建时可声明 A4（`size: {width: 11906, height: 16838}`）、边距、页脚 `PageNumber.CURRENT`（渲出 `fldChar begin/instrText PAGE/separate/end`）、`columnSpan`/`rowSpan`（渲出 gridSpan/vMerge）、`font: {ascii, hAnsi, eastAsia, cs}`，本机实验 4 全部验证，Word 渲染 1 页、页脚 "1"、PyMuPDF 检出 FangSong。但模板的样式表、列宽、行高、段落细节须由模型逐项在代码里复刻。`patchDocument` 空补丁往返官方模板 3-1：`sectPr`、vMerge、gridSpan 均保留，`document.xml` 仅 `mc:Ignorable` 多一个 `w15`，原作者信息保留（本机实验 5）。 | https://raw.githubusercontent.com/anthropics/skills/main/skills/docx/SKILL.md 第 14 行；https://raw.githubusercontent.com/dolanmiu/docx/master/docs/usage/patcher.md ；https://raw.githubusercontent.com/dolanmiu/docx/master/src/patcher/from-docx.ts ；https://raw.githubusercontent.com/dolanmiu/docx/master/docs/usage/tables.md ；https://raw.githubusercontent.com/dolanmiu/docx/master/src/file/paragraph/run/run-fonts.ts ；本机实验 4、5 |
 | E | 模板原件不动、只替换文本，保真最高；但「空单元格无锚点」（台账 #8）、窄列长文撑页（#9）、末尾空段（#11）证明「XML 全对、渲出来仍错」与填充器无关，属模板+内容长度问题。 | `knowledge/通用裁定台账.md` #8–#11 |
 | F | 「段落样式落为 `Normal (Web)`/`Heading 1`，h1 字体丢失（渲出 SimSun）……表格列宽按内容分配。`@page` 生效」。HTML `<td colspan/rowspan>` 能表达合并，但本机未验证 Word 转换后的 gridSpan/vMerge 形态（未查到）。 | `docx-backend-实测.md` §一 链 2 |
 
@@ -66,11 +68,11 @@
 | 方式 | 事实 | 出处 |
 |---|---|---|
 | A | 中间物是 Markdown 全文：律师可直接读，第二个 agent 可逐行 diff，审查报告可按行号/段落引用；不含任何版式信息，审查只覆盖内容。 | `docx-backend-实测.md` §一（Markdown 约定）；本文自证 |
-| B | 中间物是 Python 代码：内容与版式指令混在字符串与调用里；diff 可做但审查者要读代码。 | — |
+| B | 中间物是 Python 代码：内容与版式指令混在字符串与调用里；diff 可做但审查者要读代码。 | 无 |
 | C | 中间物是 XML diff：Anthropic 历史版 skill 明确「DO NOT use markdown line numbers - they don't map to XML structure」，并把 Markdown 只用于「plan comprehensive tracked changes using markdown before implementing them in OOXML」；模板 3-1 的 `document.xml` 97 KB，可见文本被 rsid/run 切碎。 | https://raw.githubusercontent.com/anthropics/skills/69c0b1a0674149f27b61b2635f935524b6add202/skills/docx/SKILL.md 第 77、107 行；本机实验 3、5 |
 | D | 中间物是 JS 代码（本机实验 4 的最小件 40 行）：同 B。 | 本机实验 4 |
 | E | 中间物是 JSON 槽位表：可读、可 diff，但只能审查「填了什么」，看不到全文语境。 | `docs/3.0-handoff.md` §2.3 |
-| F | 中间物是 HTML：可读可 diff，含样式噪音。 | — |
+| F | 中间物是 HTML：可读可 diff，含样式噪音。 | 无 |
 | 通用 | Anthropic 官方 skill 的**读取**通道是「`pandoc -t markdown file.docx`」；本机无 pandoc。成品 DOCX 的审查在任一方式下都要另走渲染（Word COM → PDF → PyMuPDF/看图）。 | https://raw.githubusercontent.com/anthropics/skills/main/skills/docx/SKILL.md 第 15、35–45 行；`docx-backend-实测.md` §二 |
 
 ### 2.4 维度 ④两平台可用性
@@ -79,7 +81,7 @@
 |---|---|---|
 | A / B / E | 只需模型写文本 + 调 `python 脚本.py`；两平台都有 shell 执行（Claude Code Bash；Codex 通过 `/skills`/`$name` 调 skill 并运行 `scripts/`）。Codex skill 目录布局「`SKILL.md`（必需）+ `scripts/`、`references/`、`assets/`」；Codex 不读 `.claude/skills`，Claude Code 不读 `.agents/skills`。 | `docs/research/skill-platforms-claude-code-与-codex.md` §1.1、§1.2（引 https://learn.chatgpt.com/docs/build-skills.md ） |
 | C | 依赖模型直接改 XML 的可靠性；Anthropic 的做法绑定其私有 skill 脚本（`merge_runs.py`、`validate.py` 含 XSD、`soffice.py`）；该 skill 许可为 Proprietary，「users may not … Create derivative works … Distribute」；README 称「provided for demonstration and educational purposes only」。Codex 侧：`openai/skills` 已标 deprecated，`.curated` 40 个 skill 中文档类仅 `pdf`（reportlab）；`openai/plugins` 62 个插件无通用 docx skill，仅两处插件内脚本产 DOCX（一处用 python-docx，一处用 zipfile 直写 OOXML）。Codex CLI 无内置文档工具：「Codex CLI can create and edit files in the working directory, but it doesn't include a visual file preview」。 | https://raw.githubusercontent.com/anthropics/skills/main/skills/docx/LICENSE.txt ；https://raw.githubusercontent.com/anthropics/skills/main/README.md 第 20、24 行 |
-| D | Anthropic skill 假设「`docx` is preinstalled — do not run `npm install` first」（其沙箱环境）；Codex/本机无此预装，须 `npm install docx`（本机可行，见 ⑤）。Codex 默认「the agent runs with network access turned off」，`workspace-write` 下「keeps network access turned off unless you enable it」（`[sandbox_workspace_write] network_access = true`），需网络的命令触发审批；`-a never` 下直接失败返回模型。首次安装后离线可跑（本机实验 4）。 | https://raw.githubusercontent.com/anthropics/skills/main/skills/docx/SKILL.md 第 21 行；https://learn.chatgpt.com/docs/agent-approvals-security.md |
+| D | Anthropic skill 假设「`docx` is preinstalled, do not run `npm install` first」（其沙箱环境）；Codex/本机无此预装，须 `npm install docx`（本机可行，见 ⑤）。Codex 默认「the agent runs with network access turned off」，`workspace-write` 下「keeps network access turned off unless you enable it」（`[sandbox_workspace_write] network_access = true`），需网络的命令触发审批；`-a never` 下直接失败返回模型。首次安装后离线可跑（本机实验 4）。 | https://raw.githubusercontent.com/anthropics/skills/main/skills/docx/SKILL.md 第 21 行；https://learn.chatgpt.com/docs/agent-approvals-security.md |
 | F | 依赖 Windows + Word COM，与平台无关但与机器强绑定。 | `docx-backend-实测.md` §二 |
 
 ### 2.5 维度 ⑤本机依赖
@@ -88,7 +90,7 @@
 |---|---|---|
 | A / B / E | python-docx 1.2.0、lxml 6.1.1 已装；离线；A 转换 0.25 s。 | 本机实验 2 |
 | C | 仅需标准库 `zipfile`；0.004 s。 | 本机实验 3 |
-| D | node 24.16、npm 11.13；`npm install docx@latest` 8.3 s 装 22 个包（docx 9.7.1，依赖 jszip、nanoid、xml-js 等）；生成 0.12 s；离线运行。Anthropic skill 的验证链另需 LibreOffice、pandoc、Poppler `pdftoppm`——本机均无。 | 本机实验 4；https://registry.npmjs.org/docx/latest ；https://raw.githubusercontent.com/anthropics/skills/main/skills/docx/SKILL.md 第 89–91 行 |
+| D | node 24.16、npm 11.13；`npm install docx@latest` 8.3 s 装 22 个包（docx 9.7.1，依赖 jszip、nanoid、xml-js 等）；生成 0.12 s；离线运行。Anthropic skill 的验证链另需 LibreOffice、pandoc、Poppler `pdftoppm`，本机均无。 | 本机实验 4；https://registry.npmjs.org/docx/latest ；https://raw.githubusercontent.com/anthropics/skills/main/skills/docx/SKILL.md 第 89–91 行 |
 | F | Word 2021 COM 可用；open 1.0 s、save 0.3 s。 | `docx-backend-实测.md` §一 |
 | 通用 | `pip install` 与 `uv --with` 本机挂起（未再尝试）。 | `docx-backend-实测.md` §二 |
 
@@ -107,9 +109,9 @@
 | 方式 | 事实 | 出处 |
 |---|---|---|
 | A | 审查报告可引用 Markdown 段落；成品是模板载体上的 DOCX，律师在 Word 里改的是成品，Markdown 不回流（ADR-0002「agent 永不写入案件工作区里已存在的文书文件」）。 | `docs/adr/0002-*.md` |
-| B / D | 审查报告引用代码或成品；律师改成品，代码不回流。 | — |
+| B / D | 审查报告引用代码或成品；律师改成品，代码不回流。 | 无 |
 | C | 成品最接近模板原件；若律师改过的成品要 agent 续改，只有 C 能直接开既有文件（Anthropic「Edit an existing document → unzip → edit → zip」）；ADR-0002 把「改了一半要 agent 续」列为待议。 | https://raw.githubusercontent.com/anthropics/skills/main/skills/docx/SKILL.md 第 14 行；`docs/adr/0002-*.md` |
-| E | 审查报告引用槽位表；律师改成品。 | — |
+| E | 审查报告引用槽位表；律师改成品。 | 无 |
 | F | 成品带本机用户名，不满足「直接可提交」（台账 #10 同类）。 | `docx-backend-实测.md` §一 链 2 |
 
 ---
@@ -120,7 +122,7 @@
 
 决策表（第 9–15 行）：
 
-> | **Create** a new document | Write a `docx` (npm) script — see gotchas below |
+> | **Create** a new document | Write a `docx` (npm) script, see gotchas below |
 > | **Edit** an existing document | `unzip` → edit `word/document.xml` → `zip` (docx-js cannot open existing files) |
 > | **Read** content | `pandoc -t markdown file.docx` |
 
@@ -169,13 +171,13 @@
 
 | # | 做了什么 | 结果 | 耗时 |
 |---|---|---|---|
-| 0 | 扫描 19 件模板的 gridSpan/vMerge/页脚域形态 | 含合并的 4 件：1-1（5 表，vMerge 4）、3-1（1 表，gridSpan 1、vMerge 4）、3-2（同 3-1）、8-2（1 表，gridSpan 1）。四件页脚均为 `fldChar` 复杂域含 PAGE。3-1 表格 5 列 grid `[866,3330,1445,1350,1345]`，第 3–4 行第 0/1 列 vMerge restart/continue，末行「合计」gridSpan=2 | — |
+| 0 | 扫描 19 件模板的 gridSpan/vMerge/页脚域形态 | 含合并的 4 件：1-1（5 表，vMerge 4）、3-1（1 表，gridSpan 1、vMerge 4）、3-2（同 3-1）、8-2（1 表，gridSpan 1）。四件页脚均为 `fldChar` 复杂域含 PAGE。3-1 表格 5 列 grid `[866,3330,1445,1350,1345]`，第 3–4 行第 0/1 列 vMerge restart/continue，末行「合计」gridSpan=2 | 无 |
 | 1 | 打开模板 3-1、清 body 留 sectPr、`add_table(8,5)`，用 `merge()` 复现同位置纵向合并与末行横向合并；另测两格都有内容时合并 | 产出 `<w:gridSpan w:val="2"/>`、`<w:vMerge w:val="restart"/>`、`<w:vMerge/>`，与模板形态一致；有内容合并得 `'上\n下'`（与文档「concatenated … by a paragraph mark」一致）。Word 打开 1 页，页脚渲出 "1"，PyMuPDF 检出 8 行表格 | 0.016 s 生成；Word 1.7 s（会话首件） |
 | 2 | 方式 A：`md2docx_tpl.py` + 模板 1-2 + 样例 Markdown 跑两次，逐 zip 条目比对 | 除 `docProps/core.xml`（脚本主动写当前时间）外全部条目相同；`document.xml` 相同。Word 1 页，字体 FangSong/MicrosoftYaHei（后者为方正小标宋简体替换，与 §三事实一致） | 0.25 s |
 | 3 | 方式 C：标准库 zipfile 解包 3-1、对 `document.xml` 做 `XXXXXX→甲乙丙` 字符串替换、固定条目时间重打包，跑两次 | 替换命中 **0** 处（XML 里是 `<w:t>XXX</w:t>` + 另一 run 的 `XXX`，63 个 `<w:t>` 含 X 的碎片）；两次输出字节全同；python-docx 可开，表格 1、页脚段 1 | 0.004 s |
 | 4 | 方式 D：`npm install docx@latest`；写 40 行 docx-js（A4、边距、页脚 `PageNumber.CURRENT`、`font:{ascii,hAnsi,eastAsia,cs}`、`rowSpan`/`columnSpan` 表格）跑两次；Word 渲染；PyMuPDF 检查 | 安装 8.3 s / 22 包 / 9.7.1；生成 0.12 s；两次仅 `core.xml` 不同（`dcterms:created/modified` 毫秒级时间）；`document.xml` 相同，gridSpan 2、vMerge 6、`w:eastAsia="仿宋"` 24 处，`pgSz 11906×16838`，页脚 `fldChar begin / instrText PAGE / separate / end`；python-docx 可开；Word 1 页，页脚 "1"，字体 FangSong + MicrosoftYaHei（方正小标宋简体替换） | 见左 |
 | 5 | docx-js `patchDocument` 空补丁往返模板 3-1 | 输出多 5 个目录条目；`document.xml` 仅 `mc:Ignorable` 追加 `w15`；`app.xml` 少量差异；sectPr、vMerge 4、gridSpan 1 保留；`core.xml` 原作者信息原样保留；Word 3 页正常 | 0.3 s |
-| 6 | Word COM 批量渲染四件（实验 1、2、4、5 产物） | 全部正常导出，无修复提示；Word 启动 1.1 s，首件 1.7 s，其后 0.26–0.35 s | — |
+| 6 | Word COM 批量渲染四件（实验 1、2、4、5 产物） | 全部正常导出，无修复提示；Word 启动 1.1 s，首件 1.7 s，其后 0.26–0.35 s | 无 |
 
 ---
 
@@ -204,8 +206,8 @@
 
 ### 5.4 在何条件下 Markdown 层是必要的
 
-- 要求「审查报告能按段落引用中间物、律师或第二个 agent 能直接读 diff」时——必要（只有 A、E、F 的中间物是非代码文本，E 无全文、F 有样式噪音）。
-- 要求「同一输入两次产出除时间戳外字节一致」且不额外写工具时——A 已满足，D 不满足，C 需先解决 run 切碎。
+- 要求「审查报告能按段落引用中间物、律师或第二个 agent 能直接读 diff」时，必要（只有 A、E、F 的中间物是非代码文本，E 无全文、F 有样式噪音）。
+- 要求「同一输入两次产出除时间戳外字节一致」且不额外写工具时，A 已满足，D 不满足，C 需先解决 run 切碎。
 - 若上述两条都不要求、且接受把 19 件模板版式用代码复刻并维护，D 是可行替代；若需要续改律师已改过的成品，则无论主路线为何，都要另有一条 C 类通道（ADR-0002 已把它列为待议）。
 
 ### 5.5 本调研留下的空格
