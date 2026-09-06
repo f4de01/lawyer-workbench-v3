@@ -39,11 +39,13 @@ import pymupdf
 if hasattr(pymupdf, "no_recommend_layout"):
     pymupdf.no_recommend_layout()  # 否则 find_tables 往 stdout 印一行推荐语，污染 --json
 
-W ="{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
 CP = "{http://schemas.openxmlformats.org/package/2006/metadata/core-properties}"
 DC = "{http://purl.org/dc/elements/1.1/}"
 REL = "{http://schemas.openxmlformats.org/package/2006/relationships}"
+DEFAULT_PAGE_WIDTH = 11906  # A4，twips；sectPr 缺 pgSz/pgMar 时的兜底
+DEFAULT_MARGIN = 1440
 DEFAULT_MAX_PAGES = 30
 DEFAULT_MAX_ROW_HEIGHT = 200.0  # 磅；1-2 模板的印模行 116 磅，实测事故 250～313 磅
 FOOTER_ZONE = 72.0  # 磅；页脚坐在下页边距里，底边 1 英寸内的字当页脚
@@ -78,8 +80,8 @@ finally { $w.Quit() }
 """
 
 
-class NoBackend(Exception):
-    """无渲染后端或文件打不开：退出码 2，不降级。"""
+class CannotRun(Exception):
+    """门禁无法运行（无渲染后端、文书或模板不存在或打不开）：退出码 2，不是不通过，也不降级。"""
 
 
 class Refused(Exception):
@@ -101,10 +103,10 @@ class Docx:
             self.zip = zipfile.ZipFile(str(path))
             self.document = ET.fromstring(self.zip.read("word/document.xml"))
         except (zipfile.BadZipFile, KeyError, ET.ParseError, OSError) as e:
-            raise NoBackend("不是能打开的 DOCX：%s（%s）" % (path, e))
+            raise CannotRun("不是能打开的 DOCX：%s（%s）" % (path, e))
         self.body = self.document.find(W + "body")
         if self.body is None:
-            raise NoBackend("DOCX 没有 body：%s" % path)
+            raise CannotRun("DOCX 没有 body：%s" % path)
         self.sect_pr = self.body.find(W + "sectPr")
 
     def blocks(self) -> List[ET.Element]:
@@ -131,9 +133,9 @@ class Docx:
     def page_metrics(self) -> Tuple[int, int, int]:
         pg = self.sect_pr.find(W + "pgSz") if self.sect_pr is not None else None
         mar = self.sect_pr.find(W + "pgMar") if self.sect_pr is not None else None
-        width = int(pg.get(W + "w")) if pg is not None and pg.get(W + "w") else 11906
-        left = int(mar.get(W + "left")) if mar is not None and mar.get(W + "left") else 1440
-        right = int(mar.get(W + "right")) if mar is not None and mar.get(W + "right") else 1440
+        width = int(pg.get(W + "w")) if pg is not None and pg.get(W + "w") else DEFAULT_PAGE_WIDTH
+        left = int(mar.get(W + "left")) if mar is not None and mar.get(W + "left") else DEFAULT_MARGIN
+        right = int(mar.get(W + "right")) if mar is not None and mar.get(W + "right") else DEFAULT_MARGIN
         return width, left, right
 
     def core(self) -> Dict[str, Optional[str]]:
@@ -262,10 +264,10 @@ def static_checks(doc: Docx, template: Optional[Docx]) -> Tuple[List[str], List[
 # ---------------------------------------------------------------- 真实渲染
 
 def render_pdf(docx_path: pathlib.Path, powershell: Optional[str]) -> Tuple[pathlib.Path, pathlib.Path]:
-    """Word COM 经 powershell.exe 子进程导出 PDF；返回 (pdf 路径, 临时目录)。任何一步不成都是 NoBackend。"""
+    """Word COM 经 powershell.exe 子进程导出 PDF；返回 (pdf 路径, 临时目录)。任何一步不成都是 CannotRun。"""
     exe = shutil.which(powershell or "powershell.exe")
     if not exe:
-        raise NoBackend("无渲染后端：找不到 %s，门禁不降级" % (powershell or "powershell.exe"))
+        raise CannotRun("无渲染后端：找不到 %s，门禁不降级" % (powershell or "powershell.exe"))
     base = pathlib.Path(tempfile.gettempdir()) / TEMP_DIRNAME
     base.mkdir(parents=True, exist_ok=True)
     while True:
@@ -284,7 +286,7 @@ def render_pdf(docx_path: pathlib.Path, powershell: Optional[str]) -> Tuple[path
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
         except subprocess.TimeoutExpired:
-            raise NoBackend("无渲染后端：Word 导出超过 120 秒没有回来")
+            raise CannotRun("无渲染后端：Word 导出超过 120 秒没有回来")
         out = (r.stdout or "").strip()
         if r.returncode == 0 and pdf.is_file():
             return pdf, work
@@ -292,7 +294,7 @@ def render_pdf(docx_path: pathlib.Path, powershell: Optional[str]) -> Tuple[path
         if first.startswith("NOWORD"):
             break  # 起不来 Word 不是瞬时故障
     shutil.rmtree(work, ignore_errors=True)
-    raise NoBackend("无渲染后端：Word COM 没能出 PDF（%s）" % first)
+    raise CannotRun("无渲染后端：Word COM 没能出 PDF（%s）" % first)
 
 
 def _page_body_text(page) -> str:
@@ -313,7 +315,7 @@ def pdf_checks(pdf: pathlib.Path, doc: Docx, max_pages: int, max_row_height: flo
     try:
         pdfdoc = pymupdf.open(str(pdf))
     except Exception as e:
-        raise NoBackend("无渲染后端：PDF 打不开（%s）" % e)
+        raise CannotRun("无渲染后端：PDF 打不开（%s）" % e)
     pages = len(pdfdoc)
     notes.append("页数：%d" % pages)
     if pages > max_pages:
@@ -428,11 +430,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     template = pathlib.Path(args.template) if args.template else None
     try:
         if not docx_path.is_file():
-            raise NoBackend("文书不存在：%s" % docx_path)
+            raise CannotRun("文书不存在：%s" % docx_path)
         if template is not None and not template.is_file():
-            raise NoBackend("模板不存在：%s" % template)
+            raise CannotRun("模板不存在：%s" % template)
         result = run_gate(docx_path, template, args.max_pages, args.max_row_height, args.powershell)
-    except NoBackend as e:
+    except CannotRun as e:
         sys.stderr.write("门禁无法运行：%s\n" % e)
         return 2
     delivered = None

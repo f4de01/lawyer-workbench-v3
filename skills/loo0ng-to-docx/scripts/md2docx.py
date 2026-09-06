@@ -195,7 +195,10 @@ class Template:
             raise Rejected("模板没有 sectPr，不是能当载体的 DOCX：%s" % path)
         paragraphs = [p for p in self.body.findall(qn("w:p")) if _text(p).strip()]
         self.tables = list(self.body.findall(qn("w:tbl")))
-        self.title = Prototype.of(paragraphs[0]) if paragraphs else Prototype(None, None)
+        # 标题原型：第一个居中的有字段落（4-2、4-3 首段是说明段，恰好也居中同格式）；没有居中的就取第一段
+        centered = [p for p in paragraphs if _jc(p) == "center"]
+        title_src = (centered or paragraphs or [None])[0]
+        self.title = Prototype.of(title_src) if title_src is not None else Prototype(None, None)
         plain = [p for p in paragraphs[1:] if _jc(p) not in ("center", "right")]
         indented = [p for p in plain if _has_first_line_indent(p)]
         body_src = (indented or plain or [None])[0]
@@ -334,6 +337,31 @@ def _merge_up(tcpr, prev_cells: Dict[int, object], start: int, table_no: int, ro
     _set_tcpr(tcpr, "vMerge", {})
 
 
+def _build_rows(tbl, rows: List[List[str]], table_no: int, row_setup) -> None:
+    """逐行逐格写表，合并由 `<`、`^` 约定决定。row_setup(r, row) 给出这一行的 trPr（可空）与
+    make_cell(start, span) -> (tcPr, 段落 pPr, 字体 rPr)；模板表与自由表只差这两样。"""
+    prev_cells: Dict[int, object] = {}
+    for r, row in enumerate(rows):
+        trpr, make_cell = row_setup(r, row)
+        tr = OxmlElement("w:tr")
+        if trpr is not None:
+            tr.append(trpr)
+        cur_cells: Dict[int, object] = {}
+        for start, span, text, up in _group_cells(row, r + 1):
+            tcpr, ppr, rpr = make_cell(start, span)
+            if span > 1:
+                _set_tcpr(tcpr, "gridSpan", {"val": str(span)})
+            if up:
+                _merge_up(tcpr, prev_cells, start, table_no, r + 1)
+            tc = OxmlElement("w:tc")
+            tc.append(tcpr)
+            tc.append(make_paragraph(ppr, rpr, text))
+            tr.append(tc)
+            cur_cells[start] = tc
+        tbl.append(tr)
+        prev_cells = cur_cells
+
+
 def build_template_table(tpl_tbl, rows: List[List[str]], table_no: int, fallback_rpr):
     """照抄模板表：tblPr 与 tblGrid 整个拷贝；第 i 行照模板第 i 行（超出的照最后一行）的行高与格格式。"""
     tbl = OxmlElement("w:tbl")
@@ -344,8 +372,8 @@ def build_template_table(tpl_tbl, rows: List[List[str]], table_no: int, fallback
     tpl_rows = tpl_tbl.findall(qn("w:tr"))
     if not tpl_rows:
         raise Rejected("模板第 %d 张表没有行" % table_no)
-    prev_cells: Dict[int, object] = {}
-    for r, row in enumerate(rows):
+
+    def row_setup(r, row):
         if len(row) != ncols:
             raise Rejected("第 %d 张表第 %d 行有 %d 格，模板这张表是 %d 列；每格一列，合并用「<」「^」占位"
                            % (table_no, r + 1, len(row), ncols))
@@ -354,12 +382,9 @@ def build_template_table(tpl_tbl, rows: List[List[str]], table_no: int, fallback
         row_rpr = _row_rpr(base)
         if row_rpr is None:
             row_rpr = fallback_rpr
-        tr = OxmlElement("w:tr")
         trpr = base.find(qn("w:trPr"))
-        if trpr is not None:
-            tr.append(copy.deepcopy(trpr))
-        cur_cells: Dict[int, object] = {}
-        for start, span, text, up in _group_cells(row, r + 1):
+
+        def make_cell(start, span):
             src, src_start, src_span = _covering(base_cells, start)
             src_pr = src.find(qn("w:tcPr"))
             tcpr = copy.deepcopy(src_pr) if src_pr is not None else OxmlElement("w:tcPr")
@@ -378,18 +403,12 @@ def build_template_table(tpl_tbl, rows: List[List[str]], table_no: int, fallback
                         wtype = wtype or t
                 if wtype is not None:
                     _set_tcpr(tcpr, "tcW", {"w": str(total), "type": wtype})
-            if span > 1:
-                _set_tcpr(tcpr, "gridSpan", {"val": str(span)})
-            if up:
-                _merge_up(tcpr, prev_cells, start, table_no, r + 1)
             ppr, rpr = _cell_paragraph_protos(src, row_rpr)
-            tc = OxmlElement("w:tc")
-            tc.append(tcpr)
-            tc.append(make_paragraph(ppr, rpr, text))
-            tr.append(tc)
-            cur_cells[start] = tc
-        tbl.append(tr)
-        prev_cells = cur_cells
+            return tcpr, ppr, rpr
+
+        return (copy.deepcopy(trpr) if trpr is not None else None), make_cell
+
+    _build_rows(tbl, rows, table_no, row_setup)
     return tbl
 
 
@@ -419,31 +438,19 @@ def build_free_table(rows: List[List[str]], usable_width: int, table_no: int, rp
         gc.set(qn("w:w"), str(col_w))
         grid.append(gc)
     tbl.append(grid)
-    prev_cells: Dict[int, object] = {}
-    for r, row in enumerate(rows):
-        tr = OxmlElement("w:tr")
-        cur_cells: Dict[int, object] = {}
-        for start, span, text, up in _group_cells(row, r + 1):
-            tcpr = OxmlElement("w:tcPr")
-            _set_tcpr(tcpr, "tcW", {"w": str(col_w * span), "type": "dxa"})
-            if span > 1:
-                _set_tcpr(tcpr, "gridSpan", {"val": str(span)})
-            if up:
-                _merge_up(tcpr, prev_cells, start, table_no, r + 1)
-            tc = OxmlElement("w:tc")
-            tc.append(tcpr)
-            tc.append(make_paragraph(None, rpr, text))
-            tr.append(tc)
-            cur_cells[start] = tc
-        tbl.append(tr)
-        prev_cells = cur_cells
+
+    def make_cell(start, span):
+        tcpr = OxmlElement("w:tcPr")
+        _set_tcpr(tcpr, "tcW", {"w": str(col_w * span), "type": "dxa"})
+        return tcpr, None, rpr
+
+    _build_rows(tbl, rows, table_no, lambda r, row: (None, make_cell))
     return tbl
 
 
 # ---------------------------------------------------------------- 转换
 
-def convert(markdown: str, template_path: pathlib.Path, out_path: pathlib.Path,
-            now: Optional[_dt.datetime] = None) -> List[str]:
+def convert(markdown: str, template_path: pathlib.Path, out_path: pathlib.Path) -> List[str]:
     """转换并写出；返回给人看的备注行（第几张表照抄了模板、哪些是自由表、有没有补空段）。"""
     blocks = parse_markdown(markdown)
     tpl = Template(template_path)
@@ -478,7 +485,7 @@ def convert(markdown: str, template_path: pathlib.Path, out_path: pathlib.Path,
     if last is not None and last.tag == qn("w:tbl"):
         tpl.sect_pr.addprevious(make_paragraph(left_ppr, None, ""))
         notes.append("正文以表格收尾，表后补了一个空段")
-    clear_metadata(tpl.doc, now)
+    clear_metadata(tpl.doc)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     part = out_path.with_name(out_path.name + ".part")
     tpl.doc.save(str(part))
@@ -486,9 +493,10 @@ def convert(markdown: str, template_path: pathlib.Path, out_path: pathlib.Path,
     return notes
 
 
-def clear_metadata(doc, now: Optional[_dt.datetime] = None) -> None:
+def clear_metadata(doc) -> None:
+    """通用裁定台账 #10：作者与最后修改者置空、修订号置 1、删上次打印时间、创建与修改时间置为本次生成时间。"""
     cp = doc.core_properties
-    now = now or _dt.datetime.now(_dt.timezone.utc)
+    now = _dt.datetime.now(_dt.timezone.utc)
     cp.author = ""
     cp.last_modified_by = ""
     cp.revision = 1

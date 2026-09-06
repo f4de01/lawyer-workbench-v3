@@ -9,7 +9,7 @@ skills/<name>/
 ├── SKILL.md              # frontmatter：name、description；编排 skill 与路由另加 disable-model-invocation: true
 ├── agents/openai.yaml    # Codex 侧外观：interface.display_name、interface.short_description（中文进这里）；编排 skill 与路由另加 policy.allow_implicit_invocation: false
 ├── references/           # 正文按需指向的长材料
-├── scripts/              # 标准库零依赖的 CLI
+├── scripts/              # 标准库零依赖的 CLI；只有 loo0ng-to-docx 例外（python-docx、PyMuPDF，ADR-0006）
 └── assets/               # 只有 loo0ng-domain 有：领域图、官方模板原件、指引手册原文（ADR-0004）
 ```
 
