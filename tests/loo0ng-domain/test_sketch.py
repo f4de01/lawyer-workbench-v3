@@ -351,6 +351,28 @@ class FromCaseTest(SketchCase):
         self.assertEqual(r.code, 0, r)
         self.assertIn("没有", r.out, "末态不适用的节点不是候选（ADR-0012）")
 
+    def test_from_case_and_check_leave_both_graphs_untouched(self):
+        """拍板前领域图一字不动（ADR-0012）：算候选与判重都只读，两张图的字节都不能变。"""
+        self.full_case_graph()
+        g = ["--graph", self.graph_path, "--domain", DOMAIN_DIR]
+        engine(*g, "add-node", "--module", "养护", "--title", "施本案专用追肥")
+        engine(*g, "generate", "--node", "施本案专用追肥", "--doc", "文书/追肥/追肥-v1.docx",
+               "--review", "文书/追肥/追肥-v1-审查报告.md")
+        engine(*g, "confirm", "--node", "施本案专用追肥", "--words", "确认")
+        domain_copy = self.tmp / "领域图.json"
+        shutil.copy(DOMAIN_DIR / "领域图.json", domain_copy)
+        case_before, domain_before = self.graph_path.read_bytes(), domain_copy.read_bytes()
+        out_path = self.tmp / "回流.json"
+        r = self.cli("from-case", "--case", self.graph_path, "--domain", domain_copy, "--out", out_path)
+        self.assertEqual(r.code, 0, r)
+        self.assertEqual(self.graph_path.read_bytes(), case_before, "from-case 不写案件图")
+        self.assertEqual(domain_copy.read_bytes(), domain_before, "from-case 不写领域图")
+        r = self.cli("check", "--proposal", out_path, "--graph", domain_copy, "--kind", "domain")
+        self.assertEqual(r.code, 0, r)
+        self.assertIn("施本案专用追肥", r.out)
+        self.assertEqual(domain_copy.read_bytes(), domain_before, "check --kind domain 不写领域图")
+        self.assertEqual(self.graph_path.read_bytes(), case_before, "回流全程只读案件图")
+
     def test_case_graph_of_another_domain_is_refused(self):
         self.full_case_graph()
         other = self.tmp / "别的领域"
