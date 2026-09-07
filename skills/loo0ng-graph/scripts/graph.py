@@ -231,7 +231,7 @@ def write_text_atomic(path: pathlib.Path, text: str) -> None:
     tmp = path.with_name(path.name + ".tmp-" + secrets.token_hex(4))
     try:
         # 显式 open：Path.write_text 的 newline= 是 3.10 才有的，律师那台 mac 是 3.9（#61）
-        with open(str(tmp), "w", encoding="utf-8", newline="\n") as f:
+        with open(tmp, "w", encoding="utf-8", newline="\n") as f:
             f.write(text)
         os.replace(tmp, path)
     finally:

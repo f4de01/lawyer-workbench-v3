@@ -492,7 +492,7 @@ def cmd_from_case(args) -> int:
     out_path = pathlib.Path(args.out) if args.out else None
     if out_path is not None:
         # 显式 open：Path.write_text 的 newline= 是 3.10 才有的（#61）
-        with open(str(out_path), "w", encoding="utf-8", newline="\n") as f:
+        with open(out_path, "w", encoding="utf-8", newline="\n") as f:
             f.write(text)
     print("回流候选（保留案件里的 id；标题须去案件化后再 check / apply --kind domain）：")
     for m in modules:
