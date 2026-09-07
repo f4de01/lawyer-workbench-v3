@@ -56,12 +56,26 @@ probe 03-Word.txt "每个候选的版本、bundle id、脚本支持标志" bash 
     [ -e "$a" ] || continue
     plist="$a/Contents/Info.plist"
     printf "\n=== %s\n" "$a"
-    printf "  版本      : %s\n" "$(defaults read "$plist" CFBundleShortVersionString 2>/dev/null || echo 读不到)"
-    printf "  构建号    : %s\n" "$(defaults read "$plist" CFBundleVersion 2>/dev/null || echo 读不到)"
-    printf "  bundle id : %s\n" "$(defaults read "$plist" CFBundleIdentifier 2>/dev/null || echo 读不到)"
-    printf "  可执行名  : %s\n" "$(defaults read "$plist" CFBundleExecutable 2>/dev/null || echo 读不到)"
-    printf "  NSAppleScriptEnabled : %s\n" "$(defaults read "$plist" NSAppleScriptEnabled 2>/dev/null || echo 没这个键)"
-    printf "  OSAScriptingDefinition: %s\n" "$(defaults read "$plist" OSAScriptingDefinition 2>/dev/null || echo 没这个键)"
+    # defaults read 要不带 .plist 后缀的路径，带了就一个键都读不出来（上一轮 WPS 全报「读不到」
+    # 就是踩这个）。一律走 plutil -p，二进制 plist 也认。
+    键() { plutil -p "$plist" 2>/dev/null | sed -n "s/.*\"$1\" => //p" | head -1; }
+    printf "  版本      : %s
+" "$(键 CFBundleShortVersionString)"
+    printf "  构建号    : %s
+" "$(键 CFBundleVersion)"
+    printf "  bundle id : %s
+" "$(键 CFBundleIdentifier)"
+    printf "  可执行名  : %s
+" "$(键 CFBundleExecutable)"
+    printf "  NSAppleScriptEnabled : %s
+" "$(键 NSAppleScriptEnabled)"
+    printf "  OSAScriptingDefinition: %s
+" "$(键 OSAScriptingDefinition)"
+    printf "  （上面空白 = plist 里没有这个键；plutil 整份 dump 见下）
+"
+    printf "  --- plist 整份（前 40 行）---
+"
+    plutil -p "$plist" 2>&1 | head -40 | sed "s/^/    /"
     printf "  bundle 里的 .sdef 文件：\n"
     find "$a" -name "*.sdef" -maxdepth 4 2>/dev/null | head -5 || echo "    （没有）"
     printf "  bundle 里的可执行文件（有没有 CLI 入口）：\n"
