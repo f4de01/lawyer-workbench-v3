@@ -40,3 +40,7 @@ ADR-0009 把每张 skill 票的完成定义落为「在 Codex 案件会话与 Cl
 - ADR-0006 附注：门禁 fixture 的落点是 `tests/loo0ng-to-docx/`，缺 Word 即 fail。ADR-0009 附注：「开发迭代可在测试工作区做」展开见本 ADR。
 - `tests/`、`evals/`、`scripts/skill-eval.py` 随 `/to-spec` 之后的建仓工作落地；两个起手场景的种子随 `loo0ng-setup-case` 与 `loo0ng-doit` 的实现票写。测试命令进 `docs/agents/skills.md` 的维护段。
 - 地图 Out of scope 加一行：CI 与第二台机器上的测试。
+
+## 附注（2026-09-07，ADR-0017）
+
+「缺 Word 即 fail 不 skip」改口径：降级的定义随门禁本体走。门禁本体已改为零依赖推算层，所以**推算层测试在任何机器上都必须全绿、不许 skip**；只有渲染层那几件许 skip，且须打印说明。「测试工作区只生不存」与其余各条不变。
