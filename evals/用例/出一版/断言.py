@@ -57,7 +57,8 @@ def check_模板原件没动_图没动(workspace, reply):
 
 def check_没往工作区乱写(workspace, reply):
     names = sorted(p.name for p in workspace.iterdir() if not _is_harness_noise(p.name))
-    allowed = {"AGENTS.md", "CLAUDE.md", "图.json", "图视图.json", "图视图.md", "模板", "文书"}
+    allowed = {"AGENTS.md", "CLAUDE.md", "图.json", "图视图.json", "图视图.md",
+               "收件箱", "材料", "指南", "模板", "文书"}  # 起手落下的六格，本用例里除 模板/ 外都是空的
     extra = [n for n in names if n not in allowed]
     assert extra == [], "工作区根多出了东西（转换与门禁应在临时位置完成，工作区里不建暂存目录）：%s" % extra
     docs = workspace / "文书" / "印章备案"

@@ -56,4 +56,4 @@ def _is_harness_noise(name):
 
 def check_没写别的文件(workspace, reply):
     names = sorted(p.name for p in workspace.iterdir() if not _is_harness_noise(p.name))
-    assert names == ["AGENTS.md", "CLAUDE.md", "图.json", "图视图.json", "图视图.md"], "工作区里多出了文件：%s" % names
+    assert names == ["AGENTS.md", "CLAUDE.md", "图.json", "图视图.json", "图视图.md", "指南", "收件箱", "文书", "材料", "模板"], "工作区里多出了文件：%s" % names
