@@ -1,0 +1,4 @@
+*.sh text eol=lf
+*.applescript text eol=lf
+*.md text eol=lf
+*.docx binary
