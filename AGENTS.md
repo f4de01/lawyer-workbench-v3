@@ -9,7 +9,7 @@
 
 ## 结构不变量（理由在 ADR-0009）
 
-1. **登记**：每件 skill 同时出现在 `skills/<name>/`、`.claude-plugin/plugin.json` 的 `skills` 数组、`README.md` 两组之一；`name` 只用小写字母、数字、连字符且带 `loo0ng-` 前缀；`SKILL.md` 不带 BOM。
+1. **登记**：每件 skill 同时出现在 `skills/<name>/`、`.claude-plugin/plugin.json` 的 `skills` 数组、`README.md` 两组之一；`name` 只用小写字母、数字、连字符且带 `loo0ng-` 前缀（路由例外，叫 `ask-loo0ng`）；`SKILL.md` 不带 BOM。
 2. **路由入口表同步**：增删或改名任一入口，必改 `ask-loo0ng` 自持的入口表。
 3. **双旗同步**：编排 skill 与路由同时带 `disable-model-invocation: true` 与 `allow_implicit_invocation: false`；参考 skill 两者都不带。
 4. **relink**：改名、增删 skill 后重跑 `scripts/link-skills.ps1`。

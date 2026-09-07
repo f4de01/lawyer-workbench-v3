@@ -11,6 +11,9 @@ import pathlib
 import subprocess
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "共用"))
+import 基线  # noqa: E402
+
 REPO = pathlib.Path(__file__).resolve().parents[3]
 SETUP = REPO / "skills" / "loo0ng-setup-case" / "scripts" / "setup.py"
 ENGINE = REPO / "skills" / "loo0ng-graph" / "scripts" / "graph.py"
@@ -82,6 +85,7 @@ def main(workspace: str) -> int:
         code = run(cmd, ws)
         if code != 0:
             return code
+    基线.写基线(ws)
     return 0
 
 
