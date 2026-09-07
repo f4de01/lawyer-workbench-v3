@@ -40,17 +40,68 @@ probe 02-依赖.txt "python-docx" bash -c 'python3 -c "import docx; print(\"pyth
 probe 02-依赖.txt "PyMuPDF"     bash -c 'python3 -c "import pymupdf; print(\"PyMuPDF OK\", pymupdf.__version__)" 2>&1'
 probe 02-依赖.txt "pip 里有没有这两件" bash -c 'python3 -m pip list 2>/dev/null | grep -iE "docx|mupdf|fitz" || echo pip 里没有这两件'
 
-echo "03 Word"
-probe 03-Word.txt "Word 装在哪" bash -c 'ls -d /Applications/Microsoft*Word.app 2>&1 || echo 没找到 Word'
-probe 03-Word.txt "Word 版本"   bash -c 'defaults read "/Applications/Microsoft Word.app/Contents/Info.plist" CFBundleShortVersionString 2>&1 || echo 读不到版本'
-probe 03-Word.txt "Word 构建号" bash -c 'defaults read "/Applications/Microsoft Word.app/Contents/Info.plist" CFBundleVersion 2>&1 || echo 读不到构建号'
-probe 03-Word.txt "LibreOffice" bash -c 'ls -d /Applications/LibreOffice.app 2>/dev/null || command -v soffice || echo 没有 LibreOffice'
+echo "03 办公套件（WPS 是律师那台机器的主力，Word 多半没有）"
+probe 03-Word.txt "装了哪些候选 app" bash -c '
+  for pat in "/Applications/wpsoffice.app" "/Applications/WPS Office.app" "/Applications/WPS Office"*.app \
+             "/Applications/Microsoft Word.app" "/Applications/LibreOffice.app" "/Applications/Pages.app"; do
+    for a in $pat; do [ -e "$a" ] && echo "有：$a"; done
+  done
+  echo "--- 再按 bundle id 全盘找一遍（mdfind，可能有别的装法）---"
+  mdfind "kMDItemCFBundleIdentifier == *wps*" 2>/dev/null | head -5 || true
+  mdfind "kMDItemKind == Application && kMDItemDisplayName == *WPS*" 2>/dev/null | head -5 || true
+  echo "（上面没有行就是没找到）"'
 
-echo "06 Word 的 AppleScript 字典（#41 的第 2、3 问靠它直接答，不用起 Word）"
-probe 06-字典.txt "sdef 读字典" bash -c 'sdef "/Applications/Microsoft Word.app" > 出/word-字典.sdef 2>&1 && echo "已写到 出/word-字典.sdef，字节数：$(wc -c < 出/word-字典.sdef)" || echo "sdef 失败（上面就是报错）"'
-probe 06-字典.txt "有没有 save as / PDF" bash -c 'grep -oiE "<command name=\"save as\"|format PDF|\"PDF\"" 出/word-字典.sdef 2>/dev/null | sort | uniq -c | head -20 || echo 字典里没搜到'
-probe 06-字典.txt "有没有 compute statistics（对应 ComputeStatistics）" bash -c 'grep -n -iE "compute statistics|statistic" 出/word-字典.sdef 2>/dev/null | head -20 || echo 字典里没有 compute statistics'
-probe 06-字典.txt "有没有 export / repaginate / print out" bash -c 'grep -n -iE "<command name=\"(export|repaginate|print out)\"" 出/word-字典.sdef 2>/dev/null | head -20 || echo 没有这三个'
+probe 03-Word.txt "每个候选的版本、bundle id、脚本支持标志" bash -c '
+  for a in /Applications/wpsoffice.app "/Applications/WPS Office.app" "/Applications/Microsoft Word.app" /Applications/LibreOffice.app; do
+    [ -e "$a" ] || continue
+    plist="$a/Contents/Info.plist"
+    printf "\n=== %s\n" "$a"
+    printf "  版本      : %s\n" "$(defaults read "$plist" CFBundleShortVersionString 2>/dev/null || echo 读不到)"
+    printf "  构建号    : %s\n" "$(defaults read "$plist" CFBundleVersion 2>/dev/null || echo 读不到)"
+    printf "  bundle id : %s\n" "$(defaults read "$plist" CFBundleIdentifier 2>/dev/null || echo 读不到)"
+    printf "  可执行名  : %s\n" "$(defaults read "$plist" CFBundleExecutable 2>/dev/null || echo 读不到)"
+    printf "  NSAppleScriptEnabled : %s\n" "$(defaults read "$plist" NSAppleScriptEnabled 2>/dev/null || echo 没这个键)"
+    printf "  OSAScriptingDefinition: %s\n" "$(defaults read "$plist" OSAScriptingDefinition 2>/dev/null || echo 没这个键)"
+    printf "  bundle 里的 .sdef 文件：\n"
+    find "$a" -name "*.sdef" -maxdepth 4 2>/dev/null | head -5 || echo "    （没有）"
+    printf "  bundle 里的可执行文件（有没有 CLI 入口）：\n"
+    ls -1 "$a/Contents/MacOS" 2>/dev/null | head -10 || echo "    （读不到）"
+  done'
+
+
+echo "06 AppleScript 字典：这一问不用起任何 app 就能答（#41 的第 2、3 问）"
+probe 06-字典.txt "逐个 app 抓字典" bash -c '
+  抓() {
+    local app="$1" tag="$2"
+    [ -e "$app" ] || { echo "跳过 $tag：没装"; return; }
+    if sdef "$app" > "出/$tag-字典.sdef" 2>"出/$tag-字典.err"; then
+      echo "$tag：sdef 成功，字节数 $(wc -c < "出/$tag-字典.sdef")"
+    else
+      echo "$tag：sdef 失败 -> $(cat "出/$tag-字典.err" 2>/dev/null | head -3)"
+      echo "     （sdef 失败通常意味着这个 app 不支持 AppleScript，这就是答案，不用再想办法）"
+    fi
+  }
+  抓 /Applications/wpsoffice.app wps
+  抓 "/Applications/WPS Office.app" wps
+  抓 "/Applications/Microsoft Word.app" word
+  抓 /Applications/LibreOffice.app libreoffice'
+
+probe 06-字典.txt "字典里有哪些动词（导出、分页、打印）" bash -c '
+  for f in 出/*-字典.sdef; do
+    [ -e "$f" ] || continue
+    printf "\n=== %s\n" "$f"
+    printf "  命令总数：%s\n" "$(grep -c "<command name=" "$f" 2>/dev/null || echo 0)"
+    printf "  --- 与导出 / 保存相关 ---\n"
+    grep -oiE "<command name=\"[^\"]*(save|export|convert|print)[^\"]*\"" "$f" 2>/dev/null | sort -u | head -20 || echo "    （无）"
+    printf "  --- PDF 字样 ---\n"
+    grep -oiE "(format PDF|\"PDF\"|PDF file format)" "$f" 2>/dev/null | sort -u | head -10 || echo "    （无）"
+    printf "  --- 分页强制（对应 Windows 的 ComputeStatistics(2)，ADR-0006 那个坑）---\n"
+    grep -n -iE "compute statistics|repaginate|pagination" "$f" 2>/dev/null | head -10 || echo "    （无）"
+    printf "  --- 全部命令名（供开发者自己看）---\n"
+    grep -oE "<command name=\"[^\"]*\"" "$f" 2>/dev/null | sed "s/<command name=//" | sort -u | head -60
+  done
+  ls 出/*-字典.sdef >/dev/null 2>&1 || echo "一个字典都没抓到：这本身就是结论，说明装的 app 都不支持 AppleScript"'
+
 
 printf '\n第一批跑完，出/ 下现在有：\n'
 ls -1 "$OUT"
