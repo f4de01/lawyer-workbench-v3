@@ -2,11 +2,11 @@
 
 用法：python 回放.py <工作区>    （由 scripts/skill-eval.py 调，也可手跑）
 回流只在开发会话发生（ADR-0012）：当前目录是本仓库、开发者一句话给出案件工作区的路径。
-跑器把 cwd 设在临时工作区，所以这里在工作区里摆出那个开发会话看得见的两样东西：
+跑器把 cwd 设在临时工作区，所以这里在工作区里摆出那个开发会话看得见的三样东西：
 
-    <工作区>/案件/          案件工作区（先照「在办中」回放一遍，再加两个律师自加节点）
-    <工作区>/领域图.json    破产领域图的可写副本，回流写的就是它
-    <工作区>/案件图指纹.txt 案件/图.json 的 sha256；回流只读案件图，跑完这份指纹须一字不差
+    <工作区>/案件/         案件工作区（先照「在办中」回放一遍，再加两个律师自加节点）
+    <工作区>/领域图.json   破产领域图的可写副本，回流写的就是它
+    <工作区>/基线.json     回流之前的三个数：案件图的 sha256、领域图的模块数与节点数
 
 副本而不是仓库里那份原件：eval 只生不存（ADR-0015），不能让一次跑动到 skills/ 下的领域图。
 两个自加节点都挂在领域图已有的模块「接管与调查」下，标题带着本案的当事人与日期：
@@ -15,15 +15,27 @@
 工作区里没有任何案件内容：文书与审查报告都是合成的几行字，当事人与法院一律写甲乙丙。
 """
 import hashlib
+import importlib.util
+import json
 import pathlib
 import shutil
 import subprocess
 import sys
 
 REPO = pathlib.Path(__file__).resolve().parents[3]
-SEEDS = pathlib.Path(__file__).resolve().parent.parent
 ENGINE = REPO / "skills" / "loo0ng-graph" / "scripts" / "graph.py"
 DOMAIN_DIR = REPO / "skills" / "loo0ng-domain" / "assets" / "破产"
+RUNNER = REPO / "scripts" / "skill-eval.py"
+EVALS = REPO / "evals" / "用例"
+
+
+def load_runner():
+    """借跑器自己的 replay_seed 把「在办中」摊进 案件/：元文件名单只该有一份（scripts/skill-eval.py）。"""
+    spec = importlib.util.spec_from_file_location("skill_eval_runner", RUNNER)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
 
 模块 = "接管与调查"
 已确认 = "乙公司甲年乙月丙日厂区接管现场情况说明"
@@ -55,27 +67,11 @@ def run(cmd, cwd) -> int:
     return r.returncode
 
 
-def replay_在办中(case: pathlib.Path) -> int:
-    """照跑器的种子接口把「在办中」原样回放进 案件/：除两份元文件外的条目先拷进去，再跑它的回放。"""
-    src = SEEDS / "在办中"
-    for entry in src.iterdir():
-        if entry.name in ("回放.py", "状态.md"):
-            continue
-        target = case / entry.name
-        if entry.is_dir():
-            shutil.copytree(entry, target)
-        else:
-            shutil.copy2(entry, target)
-    return run([src / "回放.py", case], case)
-
-
 def main(workspace: str) -> int:
     ws = pathlib.Path(workspace)
     case = ws / "案件"
     case.mkdir(parents=True, exist_ok=True)
-    code = replay_在办中(case)
-    if code != 0:
-        return code
+    load_runner().replay_seed(EVALS, "在办中", case)
 
     for rel, text in DOCS.items():
         path = case / rel
@@ -101,8 +97,16 @@ def main(workspace: str) -> int:
             return code
 
     shutil.copy2(DOMAIN_DIR / "领域图.json", ws / "领域图.json")
-    digest = hashlib.sha256((case / "图.json").read_bytes()).hexdigest()
-    (ws / "案件图指纹.txt").write_text(digest + "\n", encoding="utf-8", newline="\n")
+    # 基线让断言不必硬写「72 个节点」：下一次回流让领域图长大，这份种子跟着长，用例不动。
+    domain = json.loads((ws / "领域图.json").read_text(encoding="utf-8"))
+    基线 = {
+        "案件图sha256": hashlib.sha256((case / "图.json").read_bytes()).hexdigest(),
+        "领域图sha256": hashlib.sha256((ws / "领域图.json").read_bytes()).hexdigest(),
+        "领域图模块数": len(domain["模块"]),
+        "领域图节点数": sum(len(m["节点"]) for m in domain["模块"]),
+    }
+    (ws / "基线.json").write_text(json.dumps(基线, ensure_ascii=False, indent=2) + "\n",
+                                 encoding="utf-8", newline="\n")
     return 0
 
 

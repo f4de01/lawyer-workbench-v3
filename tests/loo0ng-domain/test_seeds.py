@@ -10,8 +10,6 @@ import hashlib
 import importlib.util
 import json
 import pathlib
-import shutil
-import stat
 import subprocess
 import sys
 import tempfile
@@ -32,14 +30,6 @@ spec.loader.exec_module(runner)
 已生成 = "乙公司食堂承包合同解除请示"
 
 
-def force_rmtree(path):
-    def on_error(func, target, exc_info):
-        pathlib.Path(target).chmod(stat.S_IWRITE)  # 律师陈述落盘后只读
-        func(target)
-
-    shutil.rmtree(path, onerror=on_error)
-
-
 class 回流种子(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -48,7 +38,7 @@ class 回流种子(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        force_rmtree(cls.ws)
+        runner.remove_workspace(cls.ws)  # 只读的律师陈述与被占用的文件都归它处理
 
     def graph(self):
         return json.loads((self.ws / "案件" / "图.json").read_text(encoding="utf-8"))
@@ -61,9 +51,9 @@ class 回流种子(unittest.TestCase):
         raise AssertionError("案件图里找不到节点「%s」" % title)
 
     def test_工作区根只有那三样(self):
-        self.assertEqual(["案件", "案件图指纹.txt", "领域图.json"],
+        self.assertEqual(["基线.json", "案件", "领域图.json"],
                          sorted(p.name for p in self.ws.iterdir()),
-                         "开发会话看得见的三样：案件工作区、可写的领域图副本、案件图指纹")
+                         "开发会话看得见的三样：案件工作区、可写的领域图副本、回流前的基线")
 
     def test_两个律师自加节点挂在领域图已有的模块下(self):
         for title in (已确认, 已生成):
@@ -84,9 +74,15 @@ class 回流种子(unittest.TestCase):
         self.assertEqual(DOMAIN_GRAPH.read_bytes(), (self.ws / "领域图.json").read_bytes(),
                          "回流写的是副本，一次 eval 不该动到 skills/ 下的领域图（ADR-0015）")
 
-    def test_案件图指纹对得上(self):
-        digest = hashlib.sha256((self.ws / "案件" / "图.json").read_bytes()).hexdigest()
-        self.assertEqual(digest, (self.ws / "案件图指纹.txt").read_text(encoding="utf-8").strip())
+    def test_基线记下了回流前的样子(self):
+        基线 = json.loads((self.ws / "基线.json").read_text(encoding="utf-8"))
+        for name, path in (("案件图sha256", self.ws / "案件" / "图.json"),
+                           ("领域图sha256", self.ws / "领域图.json")):
+            self.assertEqual(基线[name], hashlib.sha256(path.read_bytes()).hexdigest(), name)
+        domain = json.loads((self.ws / "领域图.json").read_text(encoding="utf-8"))
+        self.assertEqual(基线["领域图模块数"], len(domain["模块"]))
+        self.assertEqual(基线["领域图节点数"], sum(len(m["节点"]) for m in domain["模块"]),
+                         "断言按这个数判「只多出一个节点」，不硬写 72（下一次回流会改它）")
 
     def test_from_case恰好提出已确认的那一个(self):
         r = subprocess.run([sys.executable, str(SKETCH), "from-case",
