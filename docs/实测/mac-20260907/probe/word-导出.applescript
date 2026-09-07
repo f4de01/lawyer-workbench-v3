@@ -29,7 +29,7 @@ on run argv
 			end try
 		end if
 		if theDoc is missing value then
-			return my 连(report)
+			return my joinLines(report)
 		end if
 
 		-- 分页强制：对应 Windows 侧的 ComputeStatistics(2)，ADR-0006 记的那个坑
@@ -77,13 +77,13 @@ on run argv
 		end try
 	end tell
 
-	return my 连(report)
+	return my joinLines(report)
 end run
 
-on 连(lst)
+on joinLines(lst)
 	set out to ""
 	repeat with x in lst
 		set out to out & (x as text) & linefeed
 	end repeat
 	return out
-end 连
+end joinLines

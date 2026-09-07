@@ -37,6 +37,32 @@ fi
 
 probe "找到的 WPS app 名" bash -c "echo \"WPS_APP='$WPS_APP'\"; [ -n '$WPS_APP' ] || echo '没找到 WPS，下面 WPS 的几步会全部跳过'"
 
+# ---- wpscli：上一轮在 WPS 的 bundle 里发现的命令行入口，比 AppleScript 更有戏，先试它 ----
+# 一律先抄它自己的帮助，不猜参数（02-装.sh 同一条规矩）。
+WPSCLI=""
+for c in /Applications/wpsoffice.app/Contents/MacOS/wpscli "/Applications/WPS Office.app/Contents/MacOS/wpscli"; do
+  [ -x "$c" ] && WPSCLI="$c" && break
+done
+
+probe "wpscli 在不在" bash -c "echo \"WPSCLI='$WPSCLI'\"; [ -n '$WPSCLI' ] || echo '没找到 wpscli'"
+
+if [ -n "$WPSCLI" ]; then
+  echo "wpscli：先抄帮助，不猜参数"
+  probe "wpscli --help"    bash -c "perl -e 'alarm 30; exec @ARGV' \"$WPSCLI\" --help  < /dev/null 2>&1"
+  probe "wpscli -h"        bash -c "perl -e 'alarm 30; exec @ARGV' \"$WPSCLI\" -h      < /dev/null 2>&1"
+  probe "wpscli（无参数）" bash -c "perl -e 'alarm 30; exec @ARGV' \"$WPSCLI\"         < /dev/null 2>&1"
+  probe "wpscli --version" bash -c "perl -e 'alarm 30; exec @ARGV' \"$WPSCLI\" --version < /dev/null 2>&1"
+
+  echo "wpscli：照 LibreOffice 那套最常见的写法试一次转换（成不成都记）"
+  probe "wpscli --convert-to pdf（样例A）" bash -c "
+    perl -e 'alarm 120; exec @ARGV' \"$WPSCLI\" --convert-to pdf --outdir \"$HERE/出\" \"$HERE/样例/样例A-单页.docx\" < /dev/null 2>&1"
+  probe "wpscli --headless --convert-to pdf（样例A）" bash -c "
+    perl -e 'alarm 120; exec @ARGV' \"$WPSCLI\" --headless --convert-to pdf --outdir \"$HERE/出\" \"$HERE/样例/样例A-单页.docx\" < /dev/null 2>&1"
+  probe "wpscli 转换后出了什么" bash -c 'ls -l 出/*.pdf 2>&1 || echo 没有 PDF'
+else
+  probe "wpscli" bash -c 'echo 没有 wpscli，跳过'
+fi
+
 if [ -n "$WPS_APP" ]; then
   echo "WPS：样例 A（单页）"
   probe "WPS 样例A 导出" osascript "probe/wps-导出.applescript" "$WPS_APP" "$HERE/样例/样例A-单页.docx" "$HERE/出/wps-样例A.pdf"

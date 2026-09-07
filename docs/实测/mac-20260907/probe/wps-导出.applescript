@@ -17,7 +17,7 @@ on run argv
 	on error e0
 		set end of report to "activate: 失败 -> " & e0
 		set end of report to "==> 这个 app 连 activate 都不认，AppleScript 这条路不通。"
-		return my 连(report)
+		return my joinLines(report)
 	end try
 
 	delay 3
@@ -120,13 +120,13 @@ on run argv
 		set end of report to "close: 失败 -> " & e13
 	end try
 
-	return my 连(report)
+	return my joinLines(report)
 end run
 
-on 连(lst)
+on joinLines(lst)
 	set out to ""
 	repeat with x in lst
 		set out to out & (x as text) & linefeed
 	end repeat
 	return out
-end 连
+end joinLines

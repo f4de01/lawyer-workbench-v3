@@ -74,12 +74,20 @@ probe 06-字典.txt "逐个 app 抓字典" bash -c '
   抓() {
     local app="$1" tag="$2"
     [ -e "$app" ] || { echo "跳过 $tag：没装"; return; }
-    if sdef "$app" > "出/$tag-字典.sdef" 2>"出/$tag-字典.err"; then
+    if sdef "$app" > "出/$tag-字典.sdef" 2>"出/$tag-字典.err" && [ -s "出/$tag-字典.sdef" ]; then
       echo "$tag：sdef 成功，字节数 $(wc -c < "出/$tag-字典.sdef")"
-    else
-      echo "$tag：sdef 失败 -> $(cat "出/$tag-字典.err" 2>/dev/null | head -3)"
-      echo "     （sdef 失败通常意味着这个 app 不支持 AppleScript，这就是答案，不用再想办法）"
+      return
     fi
+    echo "$tag：sdef 没出东西 -> $(head -3 "出/$tag-字典.err" 2>/dev/null)"
+    # sdef 是 Xcode 工具，只装 Command Line Tools 时用不了（上一轮就卡在这）。
+    # 它失败不代表 app 不支持 AppleScript，所以再走两条不依赖 Xcode 的路。
+    echo "     fallback 1：bundle 里直接找 .sdef 文件"
+    find "$app" -name "*.sdef" -maxdepth 5 2>/dev/null | head -3 | while read -r f; do
+      cp "$f" "出/$tag-字典.sdef" && echo "     从 bundle 里拷到了：$f（$(wc -c < "出/$tag-字典.sdef") 字节）"
+    done
+    if [ -s "出/$tag-字典.sdef" ]; then return; fi
+    echo "     fallback 2：osascript 问它认不认脚本（这一条会起 app，可能要授权）"
+    osascript -e "tell application \"$(basename "$app" .app)\" to return name" 2>&1 | head -3 | sed "s/^/     /"
   }
   抓 /Applications/wpsoffice.app wps
   抓 "/Applications/WPS Office.app" wps

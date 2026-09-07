@@ -38,13 +38,20 @@ pwd && ls && git rev-parse --show-toplevel 2>/dev/null && git rev-parse --git-di
 
 后面每一步都在包的根目录跑（`probe/` 的同级）。
 
-## 第 1 步　脚本换行符
+## 第 1 步　脚本换行符（双保险）
 
-包是从 Windows 打出来的，脚本可能带 `\r`：
+包在打包时已经把文本文件统一成 LF 了，这一步是兜底，顺带把 `skills-兜底/` 也扫一遍。
+
+上一轮就是因为只扫了 `probe/`，`SKILL.md` 带着 CRLF 进了 `~/.agents/skills`，六件里四件的 `name` 末尾多出一个 CR。
 
 ```bash
-sed -i '' 's/\r$//' probe/*.sh probe/*.applescript 2>/dev/null || perl -pi -e 's/\r$//' probe/*.sh probe/*.applescript
+find . -type f -name "*.sh" -o -name "*.applescript" -o -name "*.md" -o -name "*.yaml" -o -name "*.json" \
+  | while read -r f; do perl -pi -e 's/\r$//' "$f"; done
+echo "扫完。抽查 SKILL.md 的 name 行："
+find . -name "SKILL.md" -path "*loo0ng*" | head -3 | while read -r f; do grep -n "^name:" "$f" | cat -A | head -1; done
 ```
+
+`cat -A` 的输出里行尾应该只有 `$`，出现 `^M$` 就说明还有 CR。
 
 ## 第 2 步　环境探针（不联网、不起 Word）
 
@@ -80,6 +87,13 @@ bash probe/02-装.sh
 
 ## 第 5 步　问律师：Skills 侧边栏里有什么
 
+**这一步不是自动化步骤，是让你开口问人。** 上一轮这三问（本步与第 8 步两问）被整个跳过，
+理由写的是「当前自动化无法读取 Codex 侧边栏 / 输入框」。那个理由不成立：
+**本来就不指望你去读 UI，是要你问律师、把他念的话记下来。**
+
+除非律师明确回答「找不到」「没有」，否则不许填「未跑到」。这三问是这趟最重要的产出之一：
+开发者要靠它写出律师日后每天要打的那一串。
+
 跟他说：
 
 > 麻烦你打开 Codex 的 Skills 侧边栏（左边栏里找 Skills / 技能），看看列表里有没有 `loo0ng` 开头的几项。有的话，**一字不差地念给我**，包括冒号前面的部分；没有的话就说没有。
@@ -94,7 +108,16 @@ bash probe/02-装.sh
 
 **这台机器上的主力是 WPS，多半没有 Microsoft Word。** 脚本先试 WPS，有 Word 才顺手再试一遍。WPS 的 AppleScript 支持没有公开文档，**驱动不动本身就是这张票要的答案**，不要想别的办法绕。
 
-真正的答案多半在第 2 步已经拿到的 `出/06-字典.txt` 里：`sdef` 抓不到字典，就说明那个 app 不支持 AppleScript。这一步是去验证字典说的对不对。
+这一步现在有两条路，**先跑的是 `wpscli`**：上一轮在 WPS 的 bundle 里发现了
+`Contents/MacOS/wpscli` 这个命令行入口，它比 AppleScript 更有戏。脚本会先抄它自己的
+帮助（不猜参数），再照最常见的写法试一次转换。
+
+AppleScript 那条路仍然试，但要知道：上一轮它报的是**脚本自己的语法错**
+（`-2740`，中文 handler 名），不是 WPS 拒绝了。这一轮语法已经改过。
+**如果它又报语法错或解析错，那是脚本的毛病，不是 WPS 不支持的证据**，照原文记下来就行。
+
+`sdef` 上一轮也没跑成，报的是「需要 Xcode」，那台机器只有 Command Line Tools。
+这一轮加了两条不依赖 Xcode 的 fallback。**`sdef` 失败同样不等于 app 不支持 AppleScript。**
 
 按顺序做：
 
@@ -130,6 +153,8 @@ ls -la ~/Desktop/实测结果-*.zip
 确认那个 zip 真的在桌面上了，再告诉律师文件名。
 
 ## 第 8 步　最后：请律师试一次 `$`
+
+**同第 5 步：这是让你开口问人，不是让你读 UI。** 不许以「自动化无法读取」为由跳过。
 
 **放在最后做**，因为试触发有可能打断这个会话；到这一步结果已经打包好了，打断也不影响。
 
