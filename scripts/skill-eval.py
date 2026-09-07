@@ -212,12 +212,27 @@ def make_workspace(case_name: str) -> pathlib.Path:
 
 
 def remove_workspace(path: pathlib.Path) -> None:
+    """删掉临时工作区（ADR-0015 只生不存）。只读文件先放开权限；被占用就退避重试。
+
+    Windows 上门禁刚起过的 Word 会多攥一会儿刚检过的 docx（#32 的出件用例里断言自己也起一次
+    门禁复核，一个工作区里两件文书就撞上了）。删不掉只报一行，不让已经跑完的结果跟着丢。
+    """
     def on_error(func, target, exc_info):
         os.chmod(target, stat.S_IWRITE)
         func(target)
 
-    if path.exists():
+    if not path.exists():
+        return
+    for wait in (0.5, 1, 2, 4, 8):
+        try:
+            shutil.rmtree(path, onerror=on_error)
+            return
+        except OSError:
+            time.sleep(wait)
+    try:
         shutil.rmtree(path, onerror=on_error)
+    except OSError as e:
+        print("删不掉临时工作区 %s：%s。它留在盘上，手动删。" % (path, e), file=sys.stderr)
 
 
 def replay_seed(evals_root: pathlib.Path, seed: str, workspace: pathlib.Path) -> None:
