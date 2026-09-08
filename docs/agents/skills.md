@@ -9,7 +9,7 @@ skills/<name>/
 ├── SKILL.md              # frontmatter：name、description；编排 skill 与路由另加 disable-model-invocation: true
 ├── agents/openai.yaml    # Codex 侧外观：interface.display_name（= name）、interface.short_description（中文进这里）；编排 skill 与路由另加 policy.allow_implicit_invocation: false
 ├── references/           # 正文按需指向的长材料
-├── scripts/              # 标准库零依赖的 CLI；只有 loo0ng-to-docx 例外（python-docx、PyMuPDF，ADR-0006）。互不 import；要写图的（loo0ng-domain 的雏形、loo0ng-setup-case 的起手与既有成品登记）以子进程调 loo0ng-graph 的引擎，默认按兄弟目录找
+├── scripts/              # 标准库零依赖的 CLI；只有 loo0ng-to-docx 的转换器例外（python-docx，ADR-0006），它的门禁本体也零依赖、PyMuPDF 只是可选的渲染加信（ADR-0017）。互不 import；要写图的（loo0ng-domain 的雏形、loo0ng-setup-case 的起手与既有成品登记）以子进程调 loo0ng-graph 的引擎，默认按兄弟目录找
 └── assets/               # 只有 loo0ng-domain 有：assets/<领域>/ 下领域图、模板/ 官方模板原件、指引手册/ 指引手册原文（ADR-0004）
 ```
 
@@ -89,7 +89,7 @@ python scripts/gen-openai-yaml.py --check
 for d in tests/*/; do python -m unittest discover -s "$d" -p 'test_*.py' || exit 1; done
 ```
 
-`tests/loo0ng-to-docx/` 要 Word COM，缺了 fail 不 skip（ADR-0006、ADR-0015）：`test_gate.py` 每件门禁起一次 Word（约 7 秒，16 例约两分钟）；`test_templates.py` 是 19 件官方模板各出一份占位件过门禁的回归，约一分半，只在开发侧跑，不进 Codex 的 30 秒 shell。别在门禁测试跑的同时另起 Word 出件，两件门禁同时跑会互相关掉对方的实例。
+`tests/loo0ng-to-docx/` 分两条跑道（ADR-0017 改了 ADR-0015 的口径）：**推算层那条不起 Word，在任何机器上必须全绿、不许 skip**（`test_layout_estimate.py` 全篇，加 `test_gate.py` 与 `test_templates.py` 的无渲染跑道，合起来十几秒）；**渲染层那条要 Word COM**（`NormalAndFaultPairsRendered`、`TemplatesRegressionRendered`），每件门禁起一次 Word 约 7 秒、合起来约六分钟，缺渲染通道时整类 skip 并打印一行说明，不静默。只在开发侧跑，不进 Codex 的 30 秒 shell。别在门禁测试跑的同时另起 Word 出件，两件门禁同时跑会互相关掉对方的实例。
 
 skill 层 eval：一个跑器两个后端，用例与种子在 `evals/`（ADR-0015，#25）：
 

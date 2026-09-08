@@ -1,5 +1,5 @@
 {
-  "说明": "参考 skill \"loo0ng-to-docx\"：律师给一段最小集稿子与模板名，由模型隐式够到本 skill、经转换器转到临时位置、经门禁 --deliver 落进 文书/。两侧都是裸提示词，测的是触发加正文。断言 文书/ 下恰一件 docx、重跑门禁通过、图没动、回复里有门禁结论。Codex 沙箱里起不来 Word COM，所以本用例 Codex 侧用 danger-full-access；每次断言自己再起一次 Word（约 7 秒）。",
+  "说明": "参考 skill \"loo0ng-to-docx\"：律师给一段最小集稿子与模板名，由模型隐式够到本 skill、经转换器转到临时位置、经门禁 --deliver 落进 文书/。两侧都是裸提示词，测的是触发加正文。断言 文书/ 下恰一件 docx、重跑门禁通过、图没动、回复里有门禁结论。Codex 侧用 danger-full-access：沙箱里 PATH 上没有 python（#28），转换器与门禁都起不来。**「沙箱里起不来 Word COM」从 ADR-0017 起不再是理由**：门禁本体零第三方依赖，没有渲染器照常给三档结论（#62）；设置留着只为 python 那一条：本票（#62）验过了，答案是不够：Codex 0.153.4 本机实测，workspace-write 下裸 `python` 报 CommandNotFoundException 退出码 1、门禁根本起不来，换写解释器绝对路径则跑得通（工作区内写文件也通），同一条提示词在 danger-full-access 下裸 `python` 就找得到。skill 正文教的是裸 `python`，所以这一格改不动；要改，得先让沙箱里的 PATH 上有 python，与渲染器无关。断言在沙箱外跑，重跑门禁时不带 --no-render，所以本机仍会起一次 Word（约 7 秒），那是断言自己要的加信，不是用例的前提。",
   "种子": "模板",
   "skill": "",
   "回复正则": "(?<!不)通过",

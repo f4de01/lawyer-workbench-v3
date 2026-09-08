@@ -15,7 +15,7 @@
   提示词.md   律师原本会打的那一句
   用例.json   种子（evals/种子/<场景>，可空）、skill（编排 skill 名，可空）、回复正则（可空）、
               回合上限、超时秒、允许工具（Claude Code 侧 --allowedTools）、
-              Codex沙箱（workspace-write 默认 / danger-full-access，要 Word COM 的用例用后者）、说明
+              Codex沙箱（workspace-write 默认 / danger-full-access，沙箱里跑不动 python 的用例用后者）、说明
   断言.py     每个 check_ 开头的函数是一条断言，签名 (workspace: Path, reply: str)，
               用 assert 判真伪，函数名即报红时给出的断言名
 
@@ -311,7 +311,9 @@ def build_command(harness: str, exe: List[str], prompt: str, workspace: pathlib.
         if allowed_tools:
             cmd += ["--allowedTools", *allowed_tools]
         return cmd
-    # Codex 沙箱里起不来 Word COM（0x80070520），要门禁的用例把 Codex沙箱 设为 danger-full-access（#28）。
+    # 沙箱里 PATH 上没有 python 的用例把 Codex沙箱 设为 danger-full-access（#28，#62 复验：workspace-write
+    # 下裸 python 报 CommandNotFoundException，写解释器绝对路径才跑得通，而 skill 正文教的是裸 python）。
+    # 「起不来 Word COM」曾经与它并列，ADR-0017 之后不再是理由：门禁本体零第三方依赖，缺渲染器照常给三档结论。
     # 提示词走 stdin（PROMPT 位置给 "-"）：PATH 上的 codex 是 npm 的 .cmd 垫片，cmd.exe 把参数里第一个换行之后的
     # 字全吞掉，多行提示词只剩第一行（#28 出一版用例发现）。
     return [*exe, "exec", "--skip-git-repo-check", "--ephemeral", "-s", codex_sandbox,
