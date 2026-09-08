@@ -26,9 +26,6 @@ class TemplatesRegression(unittest.TestCase):
         self.dir = pathlib.Path(tempfile.mkdtemp(prefix="to-docx-tpl-"))
         self.addCleanup(shutil.rmtree, self.dir, True)
 
-    def test_there_are_nineteen_templates(self):
-        self.assertEqual(len(all_templates()), 19)
-
     def test_every_template_yields_a_placeholder_docx_that_passes_the_gate(self):
         failures = []
         for tpl in all_templates():
@@ -43,6 +40,17 @@ class TemplatesRegression(unittest.TestCase):
                                 % (tpl.name, g.code, g.result and g.result["不通过项"],
                                    g.result and g.result["需人眼项"], g.err.strip()))
         self.assertEqual(failures, [], "\n".join(failures))
+
+
+class TemplatesShape(unittest.TestCase):
+    """不跑门禁的两件，只看模板与转换器：不分跑道，也就不该被渲染层的 skip 波及。"""
+
+    def setUp(self):
+        self.dir = pathlib.Path(tempfile.mkdtemp(prefix="to-docx-tpl-shape-"))
+        self.addCleanup(shutil.rmtree, self.dir, True)
+
+    def test_there_are_nineteen_templates(self):
+        self.assertEqual(len(all_templates()), 19)
 
     def test_merged_cell_templates_keep_their_shape(self):
         for prefix in MERGED:

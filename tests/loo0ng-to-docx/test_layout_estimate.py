@@ -13,6 +13,8 @@
 真值是**造件时** Word 与 WPS 各量一次冻在下面的常量里的，之后测试零依赖、永不重量：渲染器是造 fixture
 的工具，不是跑 fixture 的前提（#59 第 8 条）。断言只断「推算区间包住真值」，不断推算自己算出的数。
 """
+import builtins
+import os
 import pathlib
 import shutil
 import sys
@@ -25,8 +27,7 @@ from support import FIXTURES, convert, template
 sys.path.insert(0, str(support.SCRIPTS))
 import gate  # noqa: E402  门禁本体零第三方依赖，import 得动本身就是 A.1 的一次实跑
 
-PROBE_TEMPLATE = template("1-2.")
-FONT_SUFFIXES = (".ttf", ".ttc", ".otf", ".fon", ".pfb", ".woff", ".woff2")
+TEMPLATE = template("1-2.")  # support.PROBE_TEMPLATE 是文件名，这里要的是路径，故不同名
 
 # 造件时量的两列真值（本机 Word 16.0 与 WPS 12.1，逐件两列相同）。改动件的内容就必须重量。
 FROZEN = (
@@ -66,7 +67,7 @@ class LayoutEstimateCase(unittest.TestCase):
         """按冻结的配方造件：.md 过转换器，再按冻结的空段数做一次 XML 手术。"""
         name = case["件"].replace(".md", "")
         out = self.dir / ("%s-%d.docx" % (name, case["空段"]))
-        r = convert((FIXTURES / case["件"]).read_text(encoding="utf-8"), PROBE_TEMPLATE, out)
+        r = convert((FIXTURES / case["件"]).read_text(encoding="utf-8"), TEMPLATE, out)
         self.assertEqual(r.code, 0, r)
         if not case["空段"]:
             return out
@@ -78,7 +79,7 @@ class LayoutEstimateCase(unittest.TestCase):
                                {"word/document.xml": pad})
 
     def bands(self, docx):
-        return gate.estimate_bands(gate.Docx(docx))
+        return gate.estimate_ranges(gate.Docx(docx))
 
 
 class EstimateCoversTheMeasuredTruth(LayoutEstimateCase):
@@ -135,25 +136,30 @@ class EstimateIsConstructedNotMeasured(LayoutEstimateCase):
     """取代「跨环境一致」那条验收（不押在拿不到的 Mac 上）：钉推算器的构造属性（#59 第 5 条）。"""
 
     def test_estimating_opens_no_file_at_all_let_alone_a_font_file(self):
+        """断言比「不打开字体文件」更强：一个文件都不打开，字体文件因此无从谈起。
+
+        盯 `builtins.open` 与 `os.open` 两处：`zipfile` 与 `io.open` 最终都落到前者，后者是绕过它的那条路。
+        """
         docx = self.build(FROZEN[0])
         doc = gate.Docx(docx)  # 打开 DOCX 这一次在推算之外
         opened = []
-        import builtins
-        real_open = builtins.open
+        real = {"open": builtins.open, "os_open": os.open}
 
-        def spy(file, *a, **kw):
+        def spy_open(file, *a, **kw):
             opened.append(str(file))
-            return real_open(file, *a, **kw)
+            return real["open"](file, *a, **kw)
 
-        builtins.open = spy
+        def spy_os_open(path, *a, **kw):
+            opened.append(str(path))
+            return real["os_open"](path, *a, **kw)
+
+        builtins.open, os.open = spy_open, spy_os_open
         try:
-            band = gate.estimate_bands(doc)
+            band = gate.estimate_ranges(doc)
         finally:
-            builtins.open = real_open
+            builtins.open, os.open = real["open"], real["os_open"]
         self.assertTrue(band)
         self.assertEqual(opened, [], "推算全程一个文件都不打开（因此不受字体替换影响）：%s" % opened)
-        for path in opened:
-            self.assertFalse(path.lower().endswith(FONT_SUFFIXES), path)
 
     def test_the_same_docx_estimates_to_the_same_numbers(self):
         docx = self.build(FROZEN[1])

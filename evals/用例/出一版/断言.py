@@ -30,7 +30,7 @@ def check_落盘的件重跑门禁通过(workspace, reply):
     template = workspace / "模板" / "官方" / TEMPLATE_NAME
     r = subprocess.run([sys.executable, str(GATE), str(docx), "--template", str(template), "--json"],
                        capture_output=True, text=True, encoding="utf-8", errors="replace")
-    assert r.returncode in (0, 1), "门禁没跑起来：%s" % r.stderr.strip()
+    assert r.returncode != 2, "门禁没跑起来：%s" % r.stderr.strip()  # 0 通过 / 3 需人眼 / 1 不通过都算跑起来了
     result = json.loads(r.stdout)
     assert result["结论"] == "通过", "落盘的件门禁不通过：%s" % result["不通过项"]
     body = "".join(t for t in _texts(docx))

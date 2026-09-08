@@ -259,9 +259,7 @@ def static_checks(doc: Docx, template: Optional[Docx]) -> Tuple[List[str], List[
         empties = []
         for r, tr in enumerate(tbl.findall(W + "tr"), 1):
             for c, tc in enumerate(tr.findall(W + "tc"), 1):
-                tcpr = tc.find(W + "tcPr")
-                vm = tcpr.find(W + "vMerge") if tcpr is not None else None
-                if vm is not None and vm.get(W + "val") is None:
+                if _is_vmerge_continuation(tc):
                     continue  # 纵向合并的续格本来就没字
                 if not _text(tc).strip():
                     empties.append("第 %d 行第 %d 格" % (r, c))
@@ -302,7 +300,9 @@ ESTIMATE_BOUNDS = {  # (西文相对字号的宽度, 单倍行距相对字号的
     "lo": (0.5, 1.15, False),
     "hi": (1.0, 1.35, True),
 }
-# 行高的量测容差：PyMuPDF 的 row.bbox 含横线本身，渲染还有取整，实测稳定比推算高约 1 磅
+# 下面两条容差放宽的是**推算区间的宽度**，不是阈值：判定式那一侧一点缓冲都不加（ADR-0017「不加缓冲带」）。
+# 行高的量测容差（沿用原型 prototype/版面推算 的常数）：PyMuPDF 的 row.bbox 含横线本身，渲染还有取整，
+# 实测稳定比推算高约 1 磅。
 ROW_HEIGHT_TOLERANCE = (0.98, 1.02, 2.0)
 # 页数下界的余量。长文书的回归件实测（150 段 23 页、160 段 24 页，Word 与 WPS 同数）正好压在下界那一行数上，
 # 一格余量都没有；而 lineRule=auto 的行高由真实字体的 ascent / descent 决定，律师那台机器的替换字体与开发机
@@ -688,7 +688,7 @@ def _estimate_once(doc: Docx, params) -> Dict[str, object]:
             "最大行高": tallest, "最大行高位置": where}
 
 
-def estimate_bands(doc: Docx) -> Dict[str, object]:
+def estimate_ranges(doc: Docx) -> Dict[str, object]:
     """三项几何判据的推算区间。空白页折成「空白页数」这个量，阈值恒为 0，与另两项同一个判定式。"""
     lo = _estimate_once(doc, ESTIMATE_BOUNDS["lo"])
     hi = _estimate_once(doc, ESTIMATE_BOUNDS["hi"])
@@ -833,7 +833,12 @@ CRITERIA_UNIT = {"页数": "页", "空白页": "页", "最大行高": "磅"}
 
 
 def _verdict(lo: float, hi: float, threshold: float) -> str:
-    """ADR-0017 的判定式：T < lo 不通过；T >= hi 通过；lo <= T < hi 需人眼。点值即 lo == hi，恒为二值。"""
+    """ADR-0017 的判定式：T < lo 不通过；T >= hi 通过；lo <= T < hi 需人眼。点值即 lo == hi，恒为二值。
+
+    阈值这一侧一点缓冲都不加，ADR-0017 明令「不加缓冲带」并逐条否掉了它。区间本身有多宽是另一回事：
+    那是推算模型自己的不确定度（`ESTIMATE_BOUNDS` 两组参数加两条量测容差），住在推算层里，不是在这里
+    对同一个不确定性再收一次费。
+    """
     if threshold < lo:
         return "不通过"
     if threshold >= hi:
@@ -859,12 +864,32 @@ def _pages_text(pages: List[int]) -> str:
     return "第 %s 页" % "、".join(str(p) for p in pages)
 
 
-def judge(bands: Dict[str, object], render: Optional[Dict[str, object]], max_pages: int,
-          max_row_height: float) -> Tuple[List[str], List[str], List[str], List[str], List[str]]:
-    """三项几何判据的三档判定。回 (不通过项, 需人眼项, 披露项, 须目验清单的行, 推算区间不含实测值)。
+def _reading(name: str, ranges: Dict[str, object], render: Optional[Dict[str, object]]) -> Tuple[float, float, str, List[int]]:
+    """一项判据在这一次门禁里的读数：(下界, 上界, 坐标, 空白页码)。
 
-    有渲染结果时点值取代区间（lo == hi），需人眼当场坍缩；点值落在推算区间外时结论仍以点值为准，
-    另出一条固定名披露项，它的唯一读者是开发者（ADR-0017）。
+    有渲染结果时点值取代推算区间（回来的 lo == hi），坐标与空白页码也随之换成实测的那一份。
+    """
+    if name == "空白页":
+        lo, hi = ranges["空白页"]
+        if render is None:
+            return lo, hi, _pages_text(ranges["空白页坐标"]), ranges["必空页"]
+        pages = render["空白页"]
+        return len(pages), len(pages), _pages_text(pages) if pages else "无", pages
+    lo, hi = ranges[name]
+    seat = ranges["最大行高位置"] if name == "最大行高" else "全篇"
+    if render is None:
+        return lo, hi, seat, []
+    if name == "最大行高":
+        seat = render["最大行高位置"]
+    return render[name], render[name], seat, []
+
+
+def judge(ranges: Dict[str, object], render: Optional[Dict[str, object]], max_pages: int,
+          max_row_height: float) -> Dict[str, List[str]]:
+    """三项几何判据的三档判定。回一份四类项的清单：不通过项、需人眼项、披露项、须目验清单的行、
+    推算区间不含实测值。
+
+    点值落在推算区间外时结论仍以点值为准，另出一条固定名披露项，它的唯一读者是开发者（ADR-0017）。
     """
     fails: List[str] = []
     needs: List[str] = []
@@ -875,23 +900,12 @@ def judge(bands: Dict[str, object], render: Optional[Dict[str, object]], max_pag
     measured = render is not None
 
     for name in ("页数", "空白页", "最大行高"):
-        lo, hi = bands[name]
-        band_lo, band_hi = lo, hi
-        seat = bands["最大行高位置"] if name == "最大行高" else (
-            _pages_text(bands["空白页坐标"]) if name == "空白页" else "全篇")
-        blank_pages = bands["必空页"]
-        if render is not None:
-            point = len(render["空白页"]) if name == "空白页" else render[name]
-            if point < band_lo or point > band_hi:
-                outliers.append("推算区间不含实测值：%s，实测 %s %s，推算区间 %s～%s %s"
-                                % (name, _num(name, point), CRITERIA_UNIT[name], _num(name, band_lo),
-                                   _num(name, band_hi), CRITERIA_UNIT[name]))
-            lo = hi = point
-            if name == "最大行高":
-                seat = render["最大行高位置"]
-            elif name == "空白页":
-                seat = _pages_text(render["空白页"]) if render["空白页"] else "无"
-                blank_pages = render["空白页"]
+        band_lo, band_hi = ranges[name]
+        lo, hi, seat, blank_pages = _reading(name, ranges, render)
+        if measured and not band_lo <= lo <= band_hi:
+            outliers.append("推算区间不含实测值：%s，实测 %s %s，推算区间 %s～%s %s"
+                            % (name, _num(name, lo), CRITERIA_UNIT[name], _num(name, band_lo),
+                               _num(name, band_hi), CRITERIA_UNIT[name]))
         threshold = thresholds[name]
         verdict = _verdict(lo, hi, threshold)
         if verdict == "不通过":
@@ -909,10 +923,11 @@ def judge(bands: Dict[str, object], render: Optional[Dict[str, object]], max_pag
                                 _num(name, hi - threshold), CRITERIA_UNIT[name]))
 
     if render is None:
-        notes.append("页数：%s" % _span("页数", bands["页数"][0], bands["页数"][1], False))
+        notes.append("页数：%s" % _span("页数", ranges["页数"][0], ranges["页数"][1], False))
     else:
         notes.append("页数：%d" % render["页数"])
-    return fails, needs, notes, checklist, outliers
+    return {"不通过项": fails, "需人眼项": needs, "披露项": notes,
+            "须目验清单": checklist, "推算区间不含实测值": outliers}
 
 
 def format_checklist(lines: List[str]) -> str:
@@ -930,7 +945,7 @@ def run_gate(docx_path: pathlib.Path, template_path: Optional[pathlib.Path], max
     template = Docx(template_path) if template_path else None
     fails, notes = static_checks(doc, template)
     try:
-        bands = estimate_bands(doc)
+        ranges = estimate_ranges(doc)
     except Exception as e:  # 推算层是门禁本体，它自己挂了才是「门禁跑不动」
         raise CannotRun("推算层抛异常：%s：%s" % (type(e).__name__, e))
 
@@ -950,9 +965,11 @@ def run_gate(docx_path: pathlib.Path, template_path: Optional[pathlib.Path], max
     else:
         notes += render["披露项"]
 
-    f2, needs, n2, checklist, outliers = judge(bands, render, max_pages, max_row_height)
-    fails += f2
-    notes += n2 + outliers
+    verdicts = judge(ranges, render, max_pages, max_row_height)
+    needs = verdicts["需人眼项"]
+    outliers = verdicts["推算区间不含实测值"]
+    fails += verdicts["不通过项"]
+    notes += verdicts["披露项"] + outliers
     if template is None:
         notes.append("未给 --template：没查页脚 PAGE 域丢失与模板说明段残留")
     conclusion = "不通过" if fails else ("需人眼" if needs else "通过")
@@ -963,10 +980,10 @@ def run_gate(docx_path: pathlib.Path, template_path: Optional[pathlib.Path], max
         "需人眼项": needs,
         "披露项": notes,
         # 清单只在整件结论是需人眼时出：不通过件根本不落盘，也就没有那份审查报告（ADR-0017）
-        "须目验清单": format_checklist(checklist) if conclusion == "需人眼" else "",
+        "须目验清单": format_checklist(verdicts["须目验清单"]) if conclusion == "需人眼" else "",
         "页数": None if render is None else render["页数"],
-        "推算": {"页数": list(bands["页数"]), "空白页": list(bands["空白页"]), "最大行高": list(bands["最大行高"]),
-                "空白页坐标": bands["空白页坐标"], "最大行高位置": bands["最大行高位置"]},
+        "推算": {"页数": list(ranges["页数"]), "空白页": list(ranges["空白页"]), "最大行高": list(ranges["最大行高"]),
+                "空白页坐标": ranges["空白页坐标"], "最大行高位置": ranges["最大行高位置"]},
         "渲染": None if render is None else {"页数": render["页数"], "空白页": render["空白页"],
                                           "最大行高": render["最大行高"], "最大行高位置": render["最大行高位置"]},
         "推算区间不含实测值": outliers,

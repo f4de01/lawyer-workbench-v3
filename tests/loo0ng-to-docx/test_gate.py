@@ -247,6 +247,25 @@ class ThreeValuedConclusion(GateCase):
         self.assertEqual(target.name, "印章备案-v1.docx", "文件名不加任何装饰")
         self.assertEqual(target.read_bytes(), docx.read_bytes())
 
+    def test_the_regression_fixtures_are_in_the_band_at_the_default_thresholds(self):
+        """带内这一档不是靠喂一个凑出来的阈值：这两件在**默认阈值**上就落在带内。
+
+        它们的真值 Word 与 WPS 各量过一列（冻在 `test_layout_estimate.py` 的 FROZEN 里）：行高件两个引擎
+        都是 200.5 磅、默认阈值 200 磅；页数件两个引擎都是 30 页、默认阈值 30 页。推算分不出它们在阈值
+        哪一侧，正是这一档存在的理由。
+        """
+        cases = (("推算-行高贴阈值.md", "最大行高测不准", "最大行高"),
+                 ("推算-页数贴阈值.md", "页数测不准", "页数"))
+        for name, item, 项名 in cases:
+            with self.subTest(件=name):
+                stem = name.replace(".md", "")
+                docx = self.build(fixture(name), template("1-2."), stem + ".docx")
+                target = self.dir / "文书" / stem / (stem + "-v1.docx")
+                r = self.assert_needs_eye(docx, item, "--deliver", target)
+                self.assertEqual(r.result["已落盘"], str(target), "需人眼件照常落盘")
+                self.assertEqual(target.read_bytes(), docx.read_bytes())
+                self.assertIn("- %s：" % 项名, r.result["须目验清单"])
+
     def test_assert_pass_never_accepts_the_third_grade(self):
         """结论值域每多一档，fixture 必多一件把那一档钉住，且 assert_pass 不得接受该档（ADR-0017）。"""
         docx = self.build(fixture("印章备案.md"), template("1-2."))

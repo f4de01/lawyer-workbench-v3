@@ -16,10 +16,10 @@ ALLOWED = {"md2docx.py": {"docx"}, "gate.py": {"pymupdf"}}
 TOP_LEVEL_ALLOWED = {"md2docx.py": {"docx"}, "gate.py": set()}
 
 
-def imported_modules(path, nodes=None):
+def imported_modules(path, top_level_only=False):
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     names = set()
-    for node in (ast.walk(tree) if nodes is None else nodes(tree)):
+    for node in (tree.body if top_level_only else ast.walk(tree)):
         if isinstance(node, ast.Import):
             names.update(alias.name.partition(".")[0] for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
@@ -36,7 +36,7 @@ class IsolationTest(unittest.TestCase):
 
     def test_gate_imports_pymupdf_only_inside_the_render_branch(self):
         for name, allowed in TOP_LEVEL_ALLOWED.items():
-            top = imported_modules(SCRIPTS / name, nodes=lambda tree: tree.body)
+            top = imported_modules(SCRIPTS / name, top_level_only=True)
             third = {m for m in top if m not in sys.stdlib_module_names}
             self.assertEqual(third, allowed,
                              "%s 的模块顶层第三方 import 应只有 %s，实际 %s" % (name, allowed, third))
