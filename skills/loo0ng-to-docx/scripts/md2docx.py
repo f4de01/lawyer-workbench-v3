@@ -524,10 +524,10 @@ def default_out_path(md_path: pathlib.Path) -> pathlib.Path:
 
 # ---------------------------------------------------------------- 出件环境（ADR-0018）
 
-def pinned_version(manifest: pathlib.Path = MANIFEST) -> Optional[str]:
+def pinned_version() -> Optional[str]:
     """清单里钉的后端版本；读不到就 None。只用标准库：转换器的第三方 import 仍然只有 docx。"""
     try:
-        text = manifest.read_text(encoding="utf-8")
+        text = MANIFEST.read_text(encoding="utf-8")
     except OSError:
         return None
     for raw in text.splitlines():

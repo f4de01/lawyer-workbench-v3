@@ -8,8 +8,9 @@
 层，而且它红的那一刻正是它唯一有价值的时刻。
 
 四条：清单的形状是精确钉且只此一条依赖；这台机器上装的版本等于清单里的数；转换器回显里的版本取自运行
-时而不是照抄清单常量（拿替身元数据跑一次，回显跟着替身走，且退出码仍是 0）；清单里的数与 `SKILL.md`
-正文及 ADR-0018 里的那个数一致。另加一条守 stdout 契约：那一行恒常写、位置固定。
+时而不是照抄清单常量（拿替身元数据跑一次，回显跟着替身走，且退出码仍是 0）；清单里的数与散文里写出它的
+每一处（`SKILL.md`、`references/审查报告.md` 的样例、`docs/agents/skills.md` 的布局表、ADR-0018）一致。
+另加一条守 stdout 契约：那一行恒常写、位置固定在第二行。
 
 运行：python -m unittest tests/loo0ng-to-docx/test_requirements.py
 """
@@ -28,14 +29,20 @@ import support
 REPO = pathlib.Path(__file__).resolve().parents[2]
 SKILL = REPO / "skills" / "loo0ng-to-docx"
 MANIFEST = SKILL / "requirements.txt"
-SKILL_MD = SKILL / "SKILL.md"
-ADR = REPO / "docs" / "adr" / "0018-约束的是转换器后端版本不是哪个解释器-agent自备环境-版本对不上照跑必报.md"
+# 散文里每一份版本号副本都归这条断言管：钉子的价值全在「没有第二个会静默掉队的数」，多写一处就多一个洞。
+# ADR 按编号 glob，不写死那个中文长文件名：ADR 改名时该红在断言上，不该红在读文件上。
+PROSE = [SKILL / "SKILL.md", SKILL / "references" / "审查报告.md",
+         REPO / "docs" / "agents" / "skills.md"] + sorted((REPO / "docs" / "adr").glob("0018-*.md"))
 PACKAGE = "python-docx"
 FAKE_VERSION = "9.9.9"
 
 
 def manifest_requirements():
-    """清单里的依赖行：去掉注释与空行之后剩下的那些。"""
+    """清单里的依赖行：去掉注释与空行之后剩下的那些。
+
+    故意不调转换器的 `pinned_version()`：那个只找第一条 python-docx，看不见清单里多出来的第二条依赖，
+    而「只此一条」正是这里要验的。两边的解析各验各的，环境那一行的断言再把产品那一份带上。
+    """
     lines = []
     for raw in MANIFEST.read_text(encoding="utf-8").splitlines():
         line = raw.split("#", 1)[0].strip()
@@ -64,9 +71,10 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(importlib.metadata.version(PACKAGE), pinned,
                          "这台机器上装的 python-docx 不是清单钉的那个版本，转换器的行为不再有依据")
 
-    def test_pinned_number_is_the_same_number_in_skill_md_and_the_adr(self):
+    def test_pinned_number_is_the_same_number_everywhere_it_is_written_out(self):
         pinned = manifest_requirements()[0].split("==", 1)[1]
-        for path in (SKILL_MD, ADR):
+        self.assertEqual(len(PROSE), 4, "散文里那几处副本一处都不能漏，实际扫到 %r" % [p.name for p in PROSE])
+        for path in PROSE:
             text = path.read_text(encoding="utf-8")
             found = set(re.findall(r"python-docx[=\s]*([0-9]+\.[0-9]+\.[0-9]+)", text))
             self.assertTrue(found, "%s 里没提 python-docx 的版本，钉子与正文对不上就没人发现" % path.name)
@@ -100,6 +108,8 @@ class ConverterReportsTest(unittest.TestCase):
         self.assertTrue(lines[1].startswith("出件环境："), "环境那一行的位置固定在第二行，实际 %r" % r.out)
         self.assertIn(sys.executable, lines[1])
         self.assertIn(importlib.metadata.version(PACKAGE), lines[1])
+        # 本机装的就是钉住的那个（上一条断言），所以这里该报「一致」：转换器自己那份清单解析也跟着被验了。
+        self.assertIn("与依赖清单钉的一致", lines[1], lines[1])
 
     def test_reported_version_comes_from_the_runtime_not_the_manifest(self):
         """拿替身元数据跑一次：回显跟着替身走（说明取自运行时），照常出件（说明对不上不阻断）。"""
