@@ -6,6 +6,7 @@
 本地的假脚本（吐固定 JSON 或 JSONL）；工作区生命周期用注入的假 invoke 验证。
 """
 import importlib.util
+import io
 import json
 import os
 import pathlib
@@ -52,11 +53,6 @@ def make_case(root, name, *, prompt="写文件", checks=PASSING_CHECKS, **meta):
 
 
 class ParseArgsTest(unittest.TestCase):
-    def test_harness_is_required(self):
-        with self.assertRaises(SystemExit) as cm:
-            skill_eval.parse_args([])
-        self.assertEqual(cm.exception.code, 2)
-
     def test_harness_choices(self):
         with self.assertRaises(SystemExit):
             skill_eval.parse_args(["--harness", "gemini"])
@@ -519,6 +515,78 @@ class MainTest(unittest.TestCase):
         rc = skill_eval.main(["--harness", "claude", "--evals", str(self.root / "没有")], invoke=fake_invoke(), out=out)
         self.assertEqual(rc, 2)
 
+
+class MaterializeTest(unittest.TestCase):
+    """--materialize <种子>：只生一个工作区回放种子、打印路径就停，不跑 harness、不删。
+
+    关票触发要在这样的工作区上做（#66：只生不存），没有这条命令规矩就落不实。
+    """
+
+    def setUp(self):
+        self.tmp = pathlib.Path(tempfile.mkdtemp(prefix="skill-eval-test-"))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.用例根 = self.tmp / "evals" / "用例"
+        self.用例根.mkdir(parents=True)
+        种子 = self.tmp / "evals" / "种子" / "小种子"
+        种子.mkdir(parents=True)
+        write(种子, "状态.md", "这一份不该被拷进工作区")
+        write(种子, "收件箱/一件.txt", "种子带进来的")
+        write(种子, "回放.py", textwrap.dedent('''
+            import pathlib, sys
+            (pathlib.Path(sys.argv[1]) / "回放留下的.txt").write_text("ok", encoding="utf-8")
+        '''))
+        self.生出的 = []
+
+    def 跑(self, argv):
+        buf = io.StringIO()
+        code = skill_eval.main(argv, out=buf)
+        for line in buf.getvalue().splitlines():
+            p = pathlib.Path(line.strip())
+            if p.is_absolute() and p.is_dir():
+                self.生出的.append(p)
+                self.addCleanup(skill_eval.remove_workspace, p)
+        return code, buf.getvalue()
+
+    def test_不必给_harness(self):
+        opts = skill_eval.parse_args(["--materialize", "小种子"])
+        self.assertEqual(opts.materialize, "小种子")
+        self.assertIsNone(opts.harness)
+
+    def test_两者都不给仍是用法错(self):
+        with self.assertRaises(SystemExit) as e:
+            skill_eval.parse_args([])
+        self.assertEqual(e.exception.code, 2)
+
+    def test_两者都给也是用法错(self):
+        with self.assertRaises(SystemExit) as e:
+            skill_eval.parse_args(["--materialize", "小种子", "--harness", "claude"])
+        self.assertEqual(e.exception.code, 2)
+
+    def test_跑用例才有意义的参数一并互斥(self):
+        for 多余 in (["--case", "冒烟"], ["--runs", "2"], ["--keep"],
+                     ["--max-turns", "5"], ["--timeout", "60"]):
+            with self.subTest(多余=多余):
+                with self.assertRaises(SystemExit) as e:
+                    skill_eval.parse_args(["--materialize", "小种子", *多余])
+                self.assertEqual(e.exception.code, 2)
+
+    def test_回放种子并打印工作区路径(self):
+        code, 输出 = self.跑(["--materialize", "小种子", "--evals", str(self.用例根)])
+        self.assertEqual(code, 0, 输出)
+        self.assertEqual(len(self.生出的), 1, "该打印恰一行工作区路径：\n%s" % 输出)
+        ws = self.生出的[0]
+        self.assertEqual((ws / "收件箱" / "一件.txt").read_text(encoding="utf-8"), "种子带进来的")
+        self.assertEqual((ws / "回放留下的.txt").read_text(encoding="utf-8"), "ok")
+        self.assertFalse((ws / "状态.md").exists(), "种子的元文件不进工作区")
+
+    def test_工作区不被删掉(self):
+        code, 输出 = self.跑(["--materialize", "小种子", "--evals", str(self.用例根)])
+        self.assertEqual(code, 0, 输出)
+        self.assertTrue(self.生出的[0].is_dir(), "生出来就是给人接着用的，不能跑完就删")
+
+    def test_种子不存在是用法错(self):
+        code, _ = self.跑(["--materialize", "没这个种子", "--evals", str(self.用例根)])
+        self.assertEqual(code, 2)
 
 if __name__ == "__main__":
     unittest.main()
