@@ -113,9 +113,28 @@ def check_没有节点被自动确认(workspace, reply):
     assert 动作 == ["生成"], "起手只该落那一条生成条目，确认永不自动，实际 %s" % 动作
 
 
-def check_收尾三段(workspace, reply):
-    assert re.search(r"六格|图\.json|图视图", reply), "收尾第一段没说落了什么（六格、图与视图一件都没提）：\n%s" % reply
+# 收尾第一段那五行（SKILL.md「收尾三段」）：逐样查，报红时指名漏了哪一样。
+# 六条对五行：第一行「六格与图」两样都要，分开查才说得清漏的是哪一样（#65 漏的正是这两样）。
+第一段逐样 = (
+    ("六格", r"六格"),
+    ("图与两份视图", r"图视图"),
+    ("起手图哪一种、几模块几节点", r"空图|整份起手|按指南起手|起手图"),
+    ("归档逐格几件与留在收件箱的几件", r"归档"),
+    ("雏形写进图的几条", r"雏形"),
+    ("既有成品登记了几件", r"既有成品|%s|%s" % (成品节点, re.escape(成品))),
+)
+
+
+def check_收尾第一段逐样说清(workspace, reply):
+    缺 = [名 for 名, pat in 第一段逐样 if not re.search(pat, reply)]
+    assert not 缺, "收尾第一段漏了：%s（正文要求这五行一行不少）：\n%s" % ("、".join(缺), reply)
+
+
+def check_收尾第二段说该拍板什么(workspace, reply):
     assert re.search(r"确认|拍板", reply), "收尾第二段没说该拍板什么：\n%s" % reply
+
+
+def check_收尾第三段给下一句(workspace, reply):
     assert re.search(r"loo0ng-doit", reply), "收尾第三段没给下一句该打什么：\n%s" % reply
 
 
