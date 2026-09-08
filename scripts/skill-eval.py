@@ -15,7 +15,7 @@
   提示词.md   律师原本会打的那一句
   用例.json   种子（evals/种子/<场景>，可空）、skill（编排 skill 名，可空）、回复正则（可空）、
               回合上限、超时秒、允许工具（Claude Code 侧 --allowedTools）、
-              Codex沙箱（workspace-write 默认 / danger-full-access，沙箱里跑不动 python 的用例用后者）、说明
+              Codex沙箱（workspace-write 默认 / danger-full-access；本套用例全在默认值上，#78）、说明
   断言.py     每个 check_ 开头的函数是一条断言，签名 (workspace: Path, reply: str)，
               用 assert 判真伪，函数名即报红时给出的断言名
 
@@ -311,9 +311,12 @@ def build_command(harness: str, exe: List[str], prompt: str, workspace: pathlib.
         if allowed_tools:
             cmd += ["--allowedTools", *allowed_tools]
         return cmd
-    # 沙箱里 PATH 上没有 python 的用例把 Codex沙箱 设为 danger-full-access（#28，#62 复验：workspace-write
-    # 下裸 python 报 CommandNotFoundException，写解释器绝对路径才跑得通，而 skill 正文教的是裸 python）。
-    # 「起不来 Word COM」曾经与它并列，ADR-0017 之后不再是理由：门禁本体零第三方依赖，缺渲染器照常给三档结论。
+    # 本套用例全部跑在默认的 workspace-write 上：#78 实测把曾经标着 danger-full-access 的 11 个用例
+    # 一次全绿，回合数 9 至 18，比原先在全权限下记的还低。沙箱里 python 敲不动（#28、#62 的观察成立，
+    # 但根因不是 PATH 里没有它：那两个目录就在 PATH 上，只是 ACL 不继承、沙箱账户读不到），而这不再是
+    # 理由：转换器的环境由 agent 自备（ADR-0018），uv 与它管的解释器在沙箱账户读得到的目录下。
+    # 「起不来 Word COM」也早不是理由：门禁本体零第三方依赖，缺渲染器照常给三档结论（ADR-0017）。
+    # danger-full-access 留着是跑器的能力，不是任何用例的前提。
     # 提示词走 stdin（PROMPT 位置给 "-"）：PATH 上的 codex 是 npm 的 .cmd 垫片，cmd.exe 把参数里第一个换行之后的
     # 字全吞掉，多行提示词只剩第一行（#28 出一版用例发现）。
     return [*exe, "exec", "--skip-git-repo-check", "--ephemeral", "-s", codex_sandbox,

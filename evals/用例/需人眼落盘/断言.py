@@ -27,8 +27,10 @@ skills/loo0ng-to-docx/SKILL.md「没有渲染后端」那一节写明的显式�
 翻不翻得出来都走无渲染跑道，真正测到这条翻译的只有 Claude Code 侧。断言重跑门禁时带 --no-render，
 理由同上（办节点出一版那个用例不带，因为它断的是通过那一档）。审查报告第一段只跳空行、标题行与围
 栏行，模型给清单加围栏不算改字。Claude Code 侧拼成 /loo0ng-doit <提示词>，Codex 侧用替身提示词，
-测的是正文不是触发。Codex 侧用 danger-full-access：沙箱里 PATH 上没有 python（#28）。实测 Claude
- Code 侧 22 至 38 回合、Codex 侧 7 至 15 回合（各跑七次），上限取 60，余量按 #26 的教训留够。
+测的是正文不是触发。Codex 侧跑在默认的 workspace-write 上：沙箱里 `python` 敲不动（#28；根因是
+PATH 上那两个目录沙箱账户读不到），转换器的环境由 agent 自备、经 uv 走得通（ADR-0018，#78 实
+测）。实测 Claude Code 侧 22 至 38 回合、Codex 侧 7 至 15 回合（旧设置，全权限；各跑七次）与 14
+至 15 回合 174 至 175 秒（workspace-write，#78，两次），上限取 60，余量按 #26 的教训留够。
 """
 import json
 import pathlib

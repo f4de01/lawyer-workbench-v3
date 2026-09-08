@@ -46,3 +46,9 @@ ADR-0017 立了一条原则，但只用它管了渲染器：**缺 Word / WPS / �
 - 转换器要改（读清单、报环境）。ADR-0017 立的「门禁本体零第三方依赖、且不新增任何依赖」一个字不动，本 ADR 只碰转换器那一侧。
 - **两处没验过，另开票，不作本 ADR 的前提**：受限沙箱（Codex `workspace-write`）下能不能自备环境（[#78](https://github.com/f4de01/lawyer-workbench-v3/issues/78)）；律师那台 mac 上能不能（[#79](https://github.com/f4de01/lawyer-workbench-v3/issues/79)）。`evals` 里为绕开前者而标着 `danger-full-access` 的用例本次不动，留给那张票。
 - 本 ADR 满足三条件：照跑必报、精确钉、清单随包走，三条没有上下文都会让人奇怪；每条都在两三个方案间选过；钉子一旦立起，后来者要改它得重走一遍这里的取舍。
+
+## 附注（2026-09-08，#78）
+
+「两处没验过」的第一处销掉了：**受限沙箱（Codex `workspace-write`）下 agent 自备环境实测成立**，`uv python find` → `uv pip install --target <临时目录>` → `PYTHONPATH` → `import docx` → 转换器出件 → 门禁给结论，退出码与沙箱外逐条相同。结论是**有条件成立**，三个条件：uv 得在那个模式读得到的地方；至少已有一个 uv 管的解释器（沙箱里 `uv python install` 写不了 uv 的锁文件，装不了新的）；uv 的缓存要指到能写的地方。第二处（律师那台 mac，#79）仍未验，本 ADR 的裁定一条不动。
+
+上面那句「`evals` 里……用例本次不动，留给那张票」已被 #78 兑现：11 个用例的 `Codex沙箱` 全部改回默认的 `workspace-write` 并实跑全绿，`danger-full-access` 留在跑器里只作能力、不再是任何用例的前提。顺带把 #28 与 #62 那条「PATH 上有 python 却敲不动」的老观察挖到根：不是 PATH 里没有它们，是那两个目录的 ACL 不继承、沙箱账户读不到。逐条实测表与处置在 #78 的 resolution 评论里，本文正文照 ADR 惯例不改。

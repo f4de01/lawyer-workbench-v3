@@ -132,7 +132,7 @@ ADR-0015「目录名保持 ASCII」只指 `tests/`、`evals/` 两个顶层；其
 | `回合上限` | Claude Code 侧交给 `--max-turns`；Codex 侧数 JSONL 流里工具类 item（命令、改文件、MCP、搜索），超了杀进程树。默认 30 |
 | `超时秒` | 单次调用的墙钟上限，超了杀进程树。默认 300 |
 | `允许工具` | Claude Code 侧 `--allowedTools` 的列表（如 `["Bash(python *)"]`）；权限模式固定 acceptEdits。Codex 侧靠沙箱，不需要 |
-| `Codex沙箱` | Codex 侧 `codex exec -s` 的值：`workspace-write`（默认）或 `danger-full-access`。沙箱里起不来 Word COM（0x80070520 登录会话不存在）、`python` 也不在沙箱 PATH 上，所以要跑门禁的用例用后者（#28）。Claude Code 侧不看这个键 |
+| `Codex沙箱` | Codex 侧 `codex exec -s` 的值：`workspace-write`（默认）或 `danger-full-access`。**本套用例全在默认值上**（#78 实测全绿）：沙箱里起不来 Word COM（0x80070520 登录会话不存在）、`python` 也敲不动（那两个目录就在 PATH 上，只是沙箱账户读不到），但两样都不阻断：门禁本体零第三方依赖（ADR-0017），转换器的环境由 agent 自备、经 uv 走得通（ADR-0018）。`danger-full-access` 是跑器的能力，不是任何用例的前提 |
 | `说明` | 一句话，含用例的局限；带 skill 时必填，写明替身提示词的局限 |
 
 每次运行：在 `%TEMP%` 下建临时工作区 → 回放种子 → 调 harness（cwd 即工作区）→ 回复正则 → 逐条断言 → 删工作区（超时、超回合、断言抛错都删）。断言报红时给出函数名与 assert 的消息。

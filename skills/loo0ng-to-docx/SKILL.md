@@ -32,7 +32,7 @@ uv pip install --python <它> --target <临时目录> -r <本目录>/requirement
 PYTHONPATH=<临时目录> <它> <本目录>/scripts/md2docx.py ...        # Windows 上是 set PYTHONPATH=...
 ```
 
-**这只是走通过的一条路，不是唯一路**：手边的解释器已经装着钉住的那版 python-docx 就直接用它，uv 不在就另想办法。**受限沙箱（Codex `workspace-write`）与律师那台 mac 上能不能自备环境，尚未验证**（#78、#79），别把它们当成已验。
+**这只是走通过的一条路，不是唯一路**：手边的解释器已经装着钉住的那版 python-docx 就直接用它，uv 不在就另想办法。**受限沙箱（Codex `workspace-write`）下这条路 2026-09-08 实测走得通**（#78），两个条件：uv 与至少一个 uv 管的解释器已经在那个模式读得到的地方（沙箱里装不了新解释器）；uv 的缓存要指到能写的地方，默认缓存写不动时上面三条命令都要加 `--cache-dir <临时目录>`，或先设 `UV_CACHE_DIR`，否则第一条就退 2。**律师那台 mac 上能不能，仍未验证**（#79），别把它当成已验。
 
 ## 出一版的三步
 
