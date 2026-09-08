@@ -7,6 +7,9 @@
   python scripts/skill-eval.py --harness claude [--case 名 ...] [--runs N] [--max-turns N] [--timeout 秒]
   python scripts/skill-eval.py --harness codex  ...
   可选 --evals <用例根>（默认 evals/用例）、--keep（跑完不删工作区，只为排障）。
+  python scripts/skill-eval.py --materialize <种子名>
+              不跑用例，只生一个回放了这个种子的工作区、打印路径就停，也不删：关票触发在这样的
+              工作区上做（ADR-0015 只生不存，#66），用完由人删。
 
 用例是一个目录 evals/用例/<名>/，三个文件：
   提示词.md   律师原本会打的那一句
@@ -102,14 +105,28 @@ class RunResult:
 
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(prog="skill-eval.py", description=__doc__.splitlines()[0])
-    ap.add_argument("--harness", required=True, choices=("claude", "codex"))
-    ap.add_argument("--evals", default=str(DEFAULT_EVALS), help="用例根目录，默认 evals/用例")
+    ap.add_argument("--harness", choices=("claude", "codex"))
+    ap.add_argument("--materialize", metavar="种子名",
+                    help="只生一个回放了这个种子的工作区、打印路径就停（关票触发用，ADR-0015）")
+    ap.add_argument("--evals", default=str(DEFAULT_EVALS),
+                    help="用例根目录，默认 evals/用例；种子从它的同级 种子/ 里找")
     ap.add_argument("--case", action="append", default=[], help="只跑这些用例（目录名），可重复")
     ap.add_argument("--runs", type=positive_int, default=1, help="每用例跑几次，默认 1")
     ap.add_argument("--max-turns", type=positive_int, default=None, help="回合上限，覆盖用例里的值")
     ap.add_argument("--timeout", type=positive_int, default=None, help="单次超时秒数，覆盖用例里的值")
     ap.add_argument("--keep", action="store_true", help="跑完不删临时工作区（排障用）")
-    return ap.parse_args(argv)
+    opts = ap.parse_args(argv)
+    if opts.materialize:
+        # 只生工作区这一路不跑用例，跑用例才有意义的参数一个都不收（收了也没处使，静默吃掉更糟）。
+        多余 = [名 for 名, 值, 默认 in (("--harness", opts.harness, None), ("--case", opts.case, []),
+                                      ("--runs", opts.runs, 1), ("--keep", opts.keep, False),
+                                      ("--max-turns", opts.max_turns, None),
+                                      ("--timeout", opts.timeout, None)) if 值 != 默认]
+        if 多余:
+            ap.error("--materialize 只生工作区、不跑用例，别再给 %s" % "、".join(多余))
+    elif not opts.harness:
+        ap.error("要么给 --harness 跑用例，要么给 --materialize 只生一个工作区")
+    return opts
 
 
 def positive_int(text):
@@ -457,8 +474,26 @@ def run_case(case: Case, opts, invoke: Callable = invoke) -> List[RunResult]:
     return results
 
 
+def materialize(opts, out) -> int:
+    """只生一个回放了种子的工作区，打印路径就停：关票触发在这样的工作区上做（ADR-0015 只生不存，#66）。
+
+    生出来是给人接着用的（两侧各触发一次），所以不删；用完由人删，路径就是打印的那一行。
+    """
+    workspace = make_workspace("关票-" + opts.materialize)
+    try:
+        replay_seed(pathlib.Path(opts.evals), opts.materialize, workspace)
+    except EvalError as e:
+        remove_workspace(workspace)
+        print("错误：%s" % e, file=sys.stderr)
+        return 2
+    print(str(workspace), file=out)
+    return 0
+
+
 def main(argv=None, invoke: Callable = invoke, out=sys.stdout) -> int:
     opts = parse_args(argv)
+    if opts.materialize:
+        return materialize(opts, out)
     try:
         cases = discover_cases(pathlib.Path(opts.evals), opts.case)
     except EvalError as e:
