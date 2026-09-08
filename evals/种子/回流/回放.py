@@ -105,8 +105,9 @@ def main(workspace: str) -> int:
         "领域图模块数": len(domain["模块"]),
         "领域图节点数": sum(len(m["节点"]) for m in domain["模块"]),
     }
-    (ws / "基线.json").write_text(json.dumps(基线, ensure_ascii=False, indent=2) + "\n",
-                                 encoding="utf-8", newline="\n")
+    # 显式 open：Path.write_text 的 newline= 是 3.10 才有的，种子要跟着引擎跑在 3.9 上（#61）
+    with open(ws / "基线.json", "w", encoding="utf-8", newline="\n") as f:
+        f.write(json.dumps(基线, ensure_ascii=False, indent=2) + "\n")
     return 0
 
 
