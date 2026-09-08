@@ -8,15 +8,19 @@ tblPr、列宽、行高与单元格格式；合并单元格由 Markdown 约定�
 
 默认写到临时位置（%TEMP%/loo0ng-to-docx/），由门禁的 --deliver 在通过后才一次性落进工作区（fail-closed）。
 
+用哪个解释器归 agent（ADR-0018）：约束的是后端版本而不是哪一个 python，装法与四条约束见 SKILL.md 的
+「跑得动转换器的环境」。版本对不上照常出件，只在回显里报出来。
+
 用法：
   python md2docx.py <稿.md> --template <模板.docx> [--out <输出.docx>]
 
-退出码：0 写出（stdout 一行「已写出 <路径>」）；1 拒绝（最小集之外的写法、表形与模板不合、模板打不开；原因在
-stderr，什么都不写）；2 用法错误。
+退出码：0 写出（stdout 第一行「已写出 <路径>」，第二行「出件环境：…」，其后是给人看的备注）；1 拒绝（最小集
+之外的写法、表形与模板不合、模板打不开；原因在 stderr，什么都不写）；2 用法错误。
 """
 import argparse
 import copy
 import datetime as _dt
+import importlib.metadata
 import os
 import pathlib
 import re
@@ -36,6 +40,8 @@ LEFT_PREFIX = ":left: "
 MERGE_LEFT = "<"
 MERGE_UP = "^"
 TEMP_DIRNAME = "loo0ng-to-docx"
+BACKEND = "python-docx"
+MANIFEST = pathlib.Path(__file__).resolve().parent.parent / "requirements.txt"  # 随包分发的依赖清单
 DEFAULT_PAGE_WIDTH = 11906  # A4，twips
 DEFAULT_MARGIN = 1440
 SEPARATOR_CELL = re.compile(r"^:?-+:?$")
@@ -516,6 +522,50 @@ def default_out_path(md_path: pathlib.Path) -> pathlib.Path:
             return candidate
 
 
+# ---------------------------------------------------------------- 出件环境（ADR-0018）
+
+def pinned_version(manifest: pathlib.Path = MANIFEST) -> Optional[str]:
+    """清单里钉的后端版本；读不到就 None。只用标准库：转换器的第三方 import 仍然只有 docx。"""
+    try:
+        text = manifest.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for raw in text.splitlines():
+        line = raw.split("#", 1)[0].strip()
+        name, sep, value = line.partition("==")
+        if sep and name.strip().lower().replace("_", "-") == BACKEND:
+            return value.strip()
+    return None
+
+
+def runtime_version() -> Optional[str]:
+    """这次真正跑起来的 python-docx 版本，问运行时要，不照抄清单。"""
+    try:
+        return importlib.metadata.version(BACKEND)
+    except importlib.metadata.PackageNotFoundError:
+        return None
+
+
+def environment_line() -> str:
+    """回显里那一行出件环境：恒常写，模型原样抄进审查报告的「生成依据」段（ADR-0018）。
+
+    版本对不上照常出件、退出码照旧是 0，只在这一行里明写它不是钉住的那个版本：缺能力不阻断，但不把没量过
+    的说成量过了。
+    """
+    actual = runtime_version()
+    pinned = pinned_version()
+    if actual is None:
+        backend = "%s 版本查不出来（这个解释器上没有它的包元数据）" % BACKEND
+    elif pinned is None:
+        backend = "%s %s（依赖清单读不到，无从比对）" % (BACKEND, actual)
+    elif actual == pinned:
+        backend = "%s %s（与依赖清单钉的一致）" % (BACKEND, actual)
+    else:
+        backend = "%s %s（依赖清单钉的是 %s，这不是钉住的那个版本）" % (BACKEND, actual, pinned)
+    return "出件环境：解释器 %s（python %d.%d.%d）；%s" % (
+        sys.executable, sys.version_info[0], sys.version_info[1], sys.version_info[2], backend)
+
+
 # ---------------------------------------------------------------- CLI
 
 def build_parser() -> argparse.ArgumentParser:
@@ -547,6 +597,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         sys.stderr.write("拒绝：%s\n" % e)
         return 1
     print("已写出 %s" % out)
+    print(environment_line())
     for n in notes:
         print(n)
     return 0
