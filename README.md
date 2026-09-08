@@ -44,7 +44,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/link-skills.ps1
 
 ## Skill 清单
 
-按谁能触发分两组。八件的名单与分工见 ADR-0009；两组随实现票逐件填入。
+按谁能触发分两组。七件的名单与分工见 ADR-0009；两组随实现票逐件填入。
 
 **User-invoked**
 

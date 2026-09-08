@@ -14,7 +14,7 @@ skills/<name>/
 └── assets/               # 只有 loo0ng-domain 有：assets/<领域>/ 下领域图、模板/ 官方模板原件、指引手册/ 指引手册原文（ADR-0004）
 ```
 
-八件平铺在 `skills/` 下，不分桶；草稿放分支不放目录。分发清单：`.claude-plugin/plugin.json` 的 `skills` 数组逐件列路径（Claude Code 插件）；`.codex-plugin/plugin.json` 的 `skills` 是单一路径 `./skills/`（Codex 递归扫描，无需逐件登记）；`.claude-plugin/marketplace.json` 让仓库自成单插件市场。
+七件平铺在 `skills/` 下，不分桶；草稿放分支不放目录。分发清单：`.claude-plugin/plugin.json` 的 `skills` 数组逐件列路径（Claude Code 插件）；`.codex-plugin/plugin.json` 的 `skills` 是单一路径 `./skills/`（Codex 递归扫描，无需逐件登记）；`.claude-plugin/marketplace.json` 让仓库自成单插件市场。
 
 ## 命名与编码
 
