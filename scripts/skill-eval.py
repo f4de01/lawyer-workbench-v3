@@ -311,8 +311,9 @@ def build_command(harness: str, exe: List[str], prompt: str, workspace: pathlib.
         if allowed_tools:
             cmd += ["--allowedTools", *allowed_tools]
         return cmd
-    # 沙箱里 PATH 上没有 python 的用例把 Codex沙箱 设为 danger-full-access（#28）。「起不来 Word COM」曾经
-    # 与它并列，ADR-0017 之后不再是理由：门禁本体零第三方依赖，缺渲染器照常给三档结论（#62）。
+    # 沙箱里 PATH 上没有 python 的用例把 Codex沙箱 设为 danger-full-access（#28，#62 复验：workspace-write
+    # 下裸 python 报 CommandNotFoundException，写解释器绝对路径才跑得通，而 skill 正文教的是裸 python）。
+    # 「起不来 Word COM」曾经与它并列，ADR-0017 之后不再是理由：门禁本体零第三方依赖，缺渲染器照常给三档结论。
     # 提示词走 stdin（PROMPT 位置给 "-"）：PATH 上的 codex 是 npm 的 .cmd 垫片，cmd.exe 把参数里第一个换行之后的
     # 字全吞掉，多行提示词只剩第一行（#28 出一版用例发现）。
     return [*exe, "exec", "--skip-git-repo-check", "--ephemeral", "-s", codex_sandbox,
