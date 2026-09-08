@@ -9,6 +9,7 @@ skills/<name>/
 ├── SKILL.md              # frontmatter：name、description；编排 skill 与路由另加 disable-model-invocation: true
 ├── agents/openai.yaml    # Codex 侧外观：interface.display_name（= name）、interface.short_description（中文进这里）；编排 skill 与路由另加 policy.allow_implicit_invocation: false
 ├── references/           # 正文按需指向的长材料
+├── requirements.txt      # 只有 loo0ng-to-docx 有：转换器后端的精确钉（python-docx==1.2.0，ADR-0018）。随包到律师机，agent 自备环境时按它装；仓库根上放到不了那里
 ├── scripts/              # 标准库零依赖的 CLI；只有 loo0ng-to-docx 的转换器例外（python-docx，ADR-0006），它的门禁本体也零依赖、PyMuPDF 只是可选的渲染加信（ADR-0017）。互不 import；要写图的（loo0ng-domain 的雏形、loo0ng-setup-case 的起手与既有成品登记）以子进程调 loo0ng-graph 的引擎，默认按兄弟目录找
 └── assets/               # 只有 loo0ng-domain 有：assets/<领域>/ 下领域图、模板/ 官方模板原件、指引手册/ 指引手册原文（ADR-0004）
 ```
