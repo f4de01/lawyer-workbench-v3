@@ -66,3 +66,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/link-skills.ps1
 ## 维护
 
 登记步骤、三条校验命令与测试命令见 `docs/agents/skills.md`。发布走 changesets（`.changeset/README.md`），版本记录在 `CHANGELOG.md`，`package.json` 与两份插件清单的版本由 `scripts/sync-plugin-version.py` 同步。
+
+发完一版要装到律师那台机器上时，照 `docs/交付/现场清单.md` 现场做，结果填 `docs/交付/记录表.md`：那是开发者本人在那台机器前的四段（装、跑得动转换器的环境、起手一个案子、跑通一个节点），断网可用。
