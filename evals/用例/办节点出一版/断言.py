@@ -66,7 +66,7 @@ def _门禁(workspace, rel):
         r = subprocess.run([sys.executable, str(GATE), str(copy),
                             "--template", str(workspace / "模板" / "官方" / 模板), "--json"],
                            capture_output=True, text=True, encoding="utf-8", errors="replace")
-        assert r.returncode in (0, 1), "门禁没跑起来：%s" % r.stderr.strip()
+        assert r.returncode != 2, "门禁没跑起来：%s" % r.stderr.strip()  # 0 通过 / 3 需人眼 / 1 不通过都算跑起来了
         return json.loads(r.stdout)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

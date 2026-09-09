@@ -9,11 +9,12 @@ skills/<name>/
 ├── SKILL.md              # frontmatter：name、description；编排 skill 与路由另加 disable-model-invocation: true
 ├── agents/openai.yaml    # Codex 侧外观：interface.display_name（= name）、interface.short_description（中文进这里）；编排 skill 与路由另加 policy.allow_implicit_invocation: false
 ├── references/           # 正文按需指向的长材料
-├── scripts/              # 标准库零依赖的 CLI；只有 loo0ng-to-docx 例外（python-docx、PyMuPDF，ADR-0006）。互不 import；要写图的（loo0ng-domain 的雏形、loo0ng-setup-case 的起手与既有成品登记）以子进程调 loo0ng-graph 的引擎，默认按兄弟目录找
+├── requirements.txt      # 只有 loo0ng-to-docx 有：转换器后端的精确钉（python-docx==1.2.0，ADR-0018）。随包到律师机，agent 自备环境时按它装；仓库根上放到不了那里
+├── scripts/              # 标准库零依赖的 CLI；只有 loo0ng-to-docx 的转换器例外（python-docx，ADR-0006），它的门禁本体也零依赖、PyMuPDF 只是可选的渲染加信（ADR-0017）。互不 import；要写图的（loo0ng-domain 的雏形、loo0ng-setup-case 的起手与既有成品登记）以子进程调 loo0ng-graph 的引擎，默认按兄弟目录找
 └── assets/               # 只有 loo0ng-domain 有：assets/<领域>/ 下领域图、模板/ 官方模板原件、指引手册/ 指引手册原文（ADR-0004）
 ```
 
-八件平铺在 `skills/` 下，不分桶；草稿放分支不放目录。分发清单：`.claude-plugin/plugin.json` 的 `skills` 数组逐件列路径（Claude Code 插件）；`.codex-plugin/plugin.json` 的 `skills` 是单一路径 `./skills/`（Codex 递归扫描，无需逐件登记）；`.claude-plugin/marketplace.json` 让仓库自成单插件市场。
+七件平铺在 `skills/` 下，不分桶；草稿放分支不放目录。分发清单：`.claude-plugin/plugin.json` 的 `skills` 数组逐件列路径（Claude Code 插件）；`.codex-plugin/plugin.json` 的 `skills` 是单一路径 `./skills/`（Codex 递归扫描，无需逐件登记）；`.claude-plugin/marketplace.json` 让仓库自成单插件市场。
 
 ## 命名与编码
 
@@ -89,7 +90,7 @@ python scripts/gen-openai-yaml.py --check
 for d in tests/*/; do python -m unittest discover -s "$d" -p 'test_*.py' || exit 1; done
 ```
 
-`tests/loo0ng-to-docx/` 要 Word COM，缺了 fail 不 skip（ADR-0006、ADR-0015）：`test_gate.py` 每件门禁起一次 Word（约 7 秒，16 例约两分钟）；`test_templates.py` 是 19 件官方模板各出一份占位件过门禁的回归，约一分半，只在开发侧跑，不进 Codex 的 30 秒 shell。别在门禁测试跑的同时另起 Word 出件，两件门禁同时跑会互相关掉对方的实例。
+`tests/loo0ng-to-docx/` 分两条跑道（ADR-0017 改了 ADR-0015 的口径）：**推算层那条不起 Word，在任何机器上必须全绿、不许 skip**（`test_layout_estimate.py` 全篇，加 `test_gate.py` 与 `test_templates.py` 的无渲染跑道，合起来十几秒）；**渲染层那条要 Word COM**（`NormalAndFaultPairsRendered`、`TemplatesRegressionRendered`），每件门禁起一次 Word 约 7 秒、合起来约六分钟，缺渲染通道时整类 skip 并打印一行说明，不静默。只在开发侧跑，不进 Codex 的 30 秒 shell。别在门禁测试跑的同时另起 Word 出件，两件门禁同时跑会互相关掉对方的实例。
 
 skill 层 eval：一个跑器两个后端，用例与种子在 `evals/`（ADR-0015，#25）：
 
@@ -131,7 +132,7 @@ ADR-0015「目录名保持 ASCII」只指 `tests/`、`evals/` 两个顶层；其
 | `回合上限` | Claude Code 侧交给 `--max-turns`；Codex 侧数 JSONL 流里工具类 item（命令、改文件、MCP、搜索），超了杀进程树。默认 30 |
 | `超时秒` | 单次调用的墙钟上限，超了杀进程树。默认 300 |
 | `允许工具` | Claude Code 侧 `--allowedTools` 的列表（如 `["Bash(python *)"]`）；权限模式固定 acceptEdits。Codex 侧靠沙箱，不需要 |
-| `Codex沙箱` | Codex 侧 `codex exec -s` 的值：`workspace-write`（默认）或 `danger-full-access`。沙箱里起不来 Word COM（0x80070520 登录会话不存在）、`python` 也不在沙箱 PATH 上，所以要跑门禁的用例用后者（#28）。Claude Code 侧不看这个键 |
+| `Codex沙箱` | Codex 侧 `codex exec -s` 的值：`workspace-write`（默认）或 `danger-full-access`。**本套用例全在默认值上**（#78 实测全绿）：沙箱里起不来 Word COM（0x80070520 登录会话不存在）、`python` 也敲不动（那两个目录就在 PATH 上，只是沙箱账户读不到），但两样都不阻断：门禁本体零第三方依赖（ADR-0017），转换器的环境由 agent 自备、经 uv 走得通（ADR-0018）。`danger-full-access` 是跑器的能力，不是任何用例的前提 |
 | `说明` | 一句话，含用例的局限；带 skill 时必填，写明替身提示词的局限 |
 
 每次运行：在 `%TEMP%` 下建临时工作区 → 回放种子 → 调 harness（cwd 即工作区）→ 回复正则 → 逐条断言 → 删工作区（超时、超回合、断言抛错都删）。断言报红时给出函数名与 assert 的消息。

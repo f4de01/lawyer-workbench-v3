@@ -61,10 +61,41 @@ def convert(markdown: str, tpl: pathlib.Path, out: pathlib.Path) -> Run:
 
 
 def gate(docx: pathlib.Path, *extra) -> Run:
-    """跑门禁并解析 --json 的结果，挂在 Run.result 上；退出码 2 时 result 为 None。"""
+    """跑门禁并解析 --json 的结果，挂在 Run.result 上；退出码 2（门禁跑不动、落盘被拒）时 result 为 None。
+
+    三档结论对应退出码 0 通过 / 3 需人眼 / 1 不通过（ADR-0017），三档都出 JSON。
+    """
     r = run(GATE, docx, "--json", *extra)
-    r.result = json.loads(r.out) if r.code in (0, 1) and r.out.strip().startswith("{") else None
+    r.result = json.loads(r.out) if r.out.strip().startswith("{") else None
     return r
+
+
+def gate_no_render(docx: pathlib.Path, *extra) -> Run:
+    """无渲染跑道：只用门禁本体（推算层）。主力环境（mac + WPS）恒定走这条，任何机器上都跑得动。"""
+    return gate(docx, "--no-render", *extra)
+
+
+_RENDER_PROBE = {}
+
+
+def render_available() -> bool:
+    """本机有没有渲染通道。整个进程只探一次（一次门禁约 7 秒）。"""
+    if "ok" not in _RENDER_PROBE:
+        r = gate(templates_dir() / PROBE_TEMPLATE)
+        _RENDER_PROBE["ok"] = bool(r.result and r.result.get("渲染"))
+    return _RENDER_PROBE["ok"]
+
+
+def require_render(case) -> None:
+    """渲染层测试专用的门：拿不到渲染通道就 skip，且打印一行说明、不静默。
+
+    推算层是门禁本体、永远在，跑推算层的测试在任何机器上必须全绿、不许 skip；只有明确测「渲染器接上时
+    的行为」这几件许 skip（ADR-0017 改了 ADR-0015 的口径）。
+    """
+    if not render_available():
+        reason = "本机没有渲染通道（ADR-0017：这是主力环境的正常路径，不是故障），跳过渲染层这一件"
+        print("SKIP %s：%s" % (case.id(), reason))
+        case.skipTest(reason)
 
 
 def read_xml(docx: pathlib.Path, member: str = "word/document.xml"):
