@@ -20,6 +20,9 @@
               用 assert 判真伪，函数名即报红时给出的断言名
 
 每次运行：建临时工作区 → 回放种子 → 调 harness → 回复正则 → 逐条断言 → 删工作区（finally）。
+每次运行另建一个临时的「活图家」，经环境变量 LOO0NG_HOME 交给 harness（ADR-0019）：领域目录的活图
+本来住 ~/.loo0ng/领域/，eval 不该往律师的主目录里拷东西，也不该被上一次跑剩下的活图影响（ADR-0015
+只生不存）。跑完连它一起删。Codex 侧实测吃这个变量，沙箱也写得动 %TEMP% 下的这个目录（#90）。
 Claude Code 侧走 claude -p（--max-turns 由它自己数；MSYS_NO_PATHCONV=1 防 Git Bash 改写 /名）；
 Codex 侧走 codex exec --json，回合数按流里的工具类 item 数，超上限即杀进程树。
 Codex 侧编排 skill 用替身提示词（读 ~/.agents/skills/<名>/SKILL.md 并照做），测的是正文不是触发。
@@ -48,6 +51,7 @@ DEFAULT_MAX_TURNS = 30
 DEFAULT_TIMEOUT = 300
 CASE_KEYS = {"种子", "skill", "回复正则", "回合上限", "超时秒", "允许工具", "Codex沙箱", "说明"}
 CODEX_SANDBOXES = ("workspace-write", "danger-full-access")
+LIVE_HOME_ENV = "LOO0NG_HOME"  # 活图的「家」，与 skills/loo0ng-domain/scripts/sketch.py 同一个名字
 DEFAULT_CODEX_SANDBOX = "workspace-write"
 CASE_REQUIRED = ("种子", "回复正则")
 SEED_META_FILES = ("回放.py", "状态.md")
@@ -464,17 +468,30 @@ def run_case(case: Case, opts, invoke: Callable = invoke) -> List[RunResult]:
     results = []
     for run in range(1, opts.runs + 1):
         workspace = make_workspace(case.name)
+        live_home = None
+        was = os.environ.get(LIVE_HOME_ENV)
         started = time.monotonic()
         try:
+            # 活图家也建在 try 里：它建不出来时上面那个工作区照样要删。
+            live_home = make_workspace(case.name + "-活图家")
+            os.environ[LIVE_HOME_ENV] = str(live_home)
             if case.seed:
                 replay_seed(pathlib.Path(opts.evals), case.seed, workspace)
             inv = invoke(opts.harness, case, workspace, prompt, max_turns, timeout)
             failures = evaluate(case, workspace, inv)
         finally:
+            if was is None:
+                os.environ.pop(LIVE_HOME_ENV, None)
+            else:
+                os.environ[LIVE_HOME_ENV] = was
             if opts.keep:
                 print("  工作区保留：%s" % workspace)
+                if live_home:
+                    print("  活图家保留：%s" % live_home)
             else:
                 remove_workspace(workspace)
+                if live_home:
+                    remove_workspace(live_home)
         results.append(RunResult(case.name, run, time.monotonic() - started, inv.turns, failures))
     return results
 

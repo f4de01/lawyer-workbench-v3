@@ -6,7 +6,7 @@
 
 用法：
   python setup.py init --empty | --full | --from <定制图>
-                       [--domain <领域目录或领域图.json>] [--name <领域名>]
+                       [--domain <活图目录或其中的领域图.json>] [--name <领域名>]
                        [--workspace <目录>] [--engine <graph.py>]
   python setup.py register --node <节点标题> --doc <工作区内相对路径> --words "<律师那句话>"
                        [--domain <领域目录或领域图.json>] [--workspace <目录>] [--engine <graph.py>]
@@ -34,6 +34,9 @@ VIEW_MD = "图视图.md"
 VIEW_JSON = "图视图.json"
 DOMAIN_GRAPH_FILENAME = "领域图.json"
 DOMAIN_TEMPLATES_DIRNAME = "模板"
+SEED_ASSETS_DIRNAME = "assets"        # skill 包内的出厂种子（ADR-0019），不是活图
+SEED_SKILL_DIRNAME = "loo0ng-domain"
+SEED_ROOT_RELATIVE = pathlib.Path("..") / ".." / SEED_SKILL_DIRNAME / SEED_ASSETS_DIRNAME
 ENGINE_RELATIVE = pathlib.Path("..") / ".." / "loo0ng-graph" / "scripts" / "graph.py"
 REFERENCES = pathlib.Path(__file__).resolve().parent.parent / "references"
 AGENTS_TEMPLATE = REFERENCES / "工作区AGENTS.md"
@@ -71,6 +74,29 @@ def resolve_domain_dir(given: Optional[str]) -> Optional[pathlib.Path]:
         return None
     path = pathlib.Path(given).resolve()
     return path.parent if path.suffix.lower() == ".json" else path
+
+
+def looks_like_seed(domain_dir: pathlib.Path) -> bool:
+    """两条判据取或：兄弟 skill 的 assets/ 下（按本脚本的位置算，装在哪儿都成立），
+    或者目录名摆成 <...>/loo0ng-domain/assets/<领域名>（别处拷来的一份包）。"""
+    sibling = (pathlib.Path(__file__).resolve().parent / SEED_ROOT_RELATIVE).resolve()
+    try:
+        domain_dir.relative_to(sibling)
+        return True
+    except ValueError:
+        pass
+    return (domain_dir.parent.name == SEED_ASSETS_DIRNAME
+            and domain_dir.parent.parent.name == SEED_SKILL_DIRNAME)
+
+
+def seed_path_note(domain_dir: Optional[pathlib.Path]) -> List[str]:
+    """--domain 指到 skill 包内的出厂种子上时说一句（ADR-0019）。只报不拒：开发侧的种子回放与
+    回流本来就直接对着种子跑；错在律师起手上时，这一行是它唯一会露头的地方。"""
+    if domain_dir is None or not looks_like_seed(domain_dir):
+        return []
+    return ["注意：--domain 给的是 skill 包内的出厂种子，不是活图（ADR-0019）：包一升级它就被换掉，"
+            "律师累计的东西不在这里。律师起手要先取活图目录，调用 skill \"loo0ng-domain\" 的 "
+            "sketch.py home --name <领域名>，再把它回显的路径给 --domain。"]
 
 
 def engine_base(graph_path: pathlib.Path, domain_dir: Optional[pathlib.Path]) -> List[str]:
@@ -190,6 +216,7 @@ def cmd_init(args) -> int:
     data = read_graph(graph_path)
     notes += copy_official_templates(ws, data, domain_dir)
     notes += write_pointer_block(ws, data, domain_dir)
+    notes += seed_path_note(domain_dir)
     notes.append("两份视图已随图落下：%s、%s" % (VIEW_MD, VIEW_JSON))
     for line in notes:
         print(line)
@@ -266,7 +293,9 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--workspace", default=".", help="案件工作区，默认当前目录")
     common.add_argument("--engine", default=None,
                         help="图引擎 graph.py 的路径，默认取兄弟 skill loo0ng-graph 里的")
-    common.add_argument("--domain", default=None, help="领域目录或其中的 %s" % DOMAIN_GRAPH_FILENAME)
+    common.add_argument("--domain", default=None,
+                        help="活图目录或其中的 %s；活图路径由 skill \"loo0ng-domain\" 的 "
+                             "sketch.py home 取，别给包内 assets/ 下的出厂种子" % DOMAIN_GRAPH_FILENAME)
 
     p = sub.add_parser("init", parents=[common], help="建六格、起手图三选一、拷官方模板、写指针块")
     p.add_argument("--empty", action="store_true", help="空图起手")

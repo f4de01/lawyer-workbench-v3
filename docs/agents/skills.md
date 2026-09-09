@@ -11,7 +11,7 @@ skills/<name>/
 ├── references/           # 正文按需指向的长材料
 ├── requirements.txt      # 只有 loo0ng-to-docx 有：转换器后端的精确钉（python-docx==1.2.0，ADR-0018）。随包到律师机，agent 自备环境时按它装；仓库根上放到不了那里
 ├── scripts/              # 标准库零依赖的 CLI；只有 loo0ng-to-docx 的转换器例外（python-docx，ADR-0006），它的门禁本体也零依赖、PyMuPDF 只是可选的渲染加信（ADR-0017）。互不 import；要写图的（loo0ng-domain 的雏形、loo0ng-setup-case 的起手与既有成品登记）以子进程调 loo0ng-graph 的引擎，默认按兄弟目录找
-└── assets/               # 只有 loo0ng-domain 有：assets/<领域>/ 下领域图、模板/ 官方模板原件、指引手册/ 指引手册原文（ADR-0004）
+└── assets/               # 只有 loo0ng-domain 有：assets/<领域>/ 下领域图、模板/ 官方模板原件、指引手册/ 指引手册原文（ADR-0004）。这份是出厂种子，随包升级被换掉；律师那台机上的活图在 ~/.loo0ng/领域/<领域>/，由 sketch.py home 首次起手时拷出（ADR-0019）
 ```
 
 七件平铺在 `skills/` 下，不分桶；草稿放分支不放目录。分发清单：`.claude-plugin/plugin.json` 的 `skills` 数组逐件列路径（Claude Code 插件）；`.codex-plugin/plugin.json` 的 `skills` 是单一路径 `./skills/`（Codex 递归扫描，无需逐件登记）；`.claude-plugin/marketplace.json` 让仓库自成单插件市场。
@@ -136,6 +136,8 @@ ADR-0015「目录名保持 ASCII」只指 `tests/`、`evals/` 两个顶层；其
 | `说明` | 一句话，含用例的局限；带 skill 时必填，写明替身提示词的局限 |
 
 每次运行：在 `%TEMP%` 下建临时工作区 → 回放种子 → 调 harness（cwd 即工作区）→ 回复正则 → 逐条断言 → 删工作区（超时、超回合、断言抛错都删）。断言报红时给出函数名与 assert 的消息。
+
+每次运行另在 `%TEMP%` 下建一个**活图家**，经环境变量 `LOO0NG_HOME` 交给 harness（ADR-0019）：领域目录的活图本来住 `~/.loo0ng/领域/`，eval 既不该往律师的主目录里拷东西，也不该吃上一次跑剩下的活图（ADR-0015 只生不存）。跑完连它一起删，`--keep` 时连它一起留并打印路径。两侧都吃这个变量（#90 实测 Codex 的 `workspace-write` 沙箱写得动 `%TEMP%` 下的它）。`--materialize` 生出来的工作区不设它，也用不着：种子的回放（`evals/共用/回放助手.py`）把领域目录钉在包内的出厂种子上，那个工作区的指针块指的就是种子，手工触发时碰不到活图。
 
 种子接口（实现随起手票）：`evals/种子/<场景>/` 里除 `回放.py` 与 `状态.md` 之外的条目原样拷进工作区，再在工作区里跑 `python 回放.py <工作区>`；起手（`loo0ng-setup-case`）、引擎 CLI、归档脚本都写在回放里，跑器不另定回放格式。
 

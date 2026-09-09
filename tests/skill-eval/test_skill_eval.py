@@ -328,6 +328,28 @@ class RunCaseLifecycleTest(unittest.TestCase):
         ws = seen[0][0]
         self.assertTrue(ws.exists())
         shutil.rmtree(ws)
+        for 家 in pathlib.Path(tempfile.gettempdir()).glob("skill-eval-留-活图家-*"):
+            shutil.rmtree(家, ignore_errors=True)
+
+    def test_每次运行给一个临时活图家(self):
+        """活图本来住 ~/.loo0ng/领域/（ADR-0019）；eval 不往律师的主目录里拷东西，也不吃上一次跑剩下的活图。"""
+        case = skill_eval.load_case(make_case(self.root, "活图家"))
+        家 = []
+
+        def 记下(harness, c, workspace, prompt, max_turns, timeout):
+            家.append(os.environ.get(skill_eval.LIVE_HOME_ENV))
+            return skill_eval.Invocation(status="ok", reply="", turns=1, detail="")
+
+        旧 = os.environ.pop(skill_eval.LIVE_HOME_ENV, None)
+        self.addCleanup(lambda: os.environ.__setitem__(skill_eval.LIVE_HOME_ENV, 旧)
+                        if 旧 is not None else None)
+        skill_eval.run_case(case, self.opts(argv=["--runs", "2"]), invoke=记下)
+        self.assertEqual(len(家), 2)
+        self.assertTrue(all(家), "每次运行都要经 %s 给一个活图家：%s" % (skill_eval.LIVE_HOME_ENV, 家))
+        self.assertEqual(len(set(家)), 2, "两次运行不该共用一个活图家：%s" % 家)
+        for 路径 in 家:
+            self.assertFalse(pathlib.Path(路径).exists(), "跑完要连活图家一起删（只生不存）")
+        self.assertIsNone(os.environ.get(skill_eval.LIVE_HOME_ENV), "跑完要把环境变量还原")
 
     def test_runs_n_uses_a_new_workspace_each_time(self):
         case = skill_eval.load_case(make_case(self.root, "多跑"))

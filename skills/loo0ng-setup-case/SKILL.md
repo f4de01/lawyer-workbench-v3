@@ -17,7 +17,7 @@ CLI 是本目录的 `scripts/setup.py`（Python 标准库，零依赖，不 impo
 
 顺序是死的：**建目录 → 起手图 → 归档收件箱 → 指南非空则跑雏形 → 回显起手清单 → 律师一句话 → 写图**。起手清单是这一路上唯一的确认点（ADR-0008），前面五步不问律师，后面写图不再问第二遍。
 
-### 1–2. 六格与起手图（一条命令）
+### 1–2. 六格与起手图（先取领域目录，再一条命令）
 
 起手图三选一是人的决定，不受惰性约束（ADR-0004）。律师那句话里说了就照办；没说清就只问这一件，给三个选项，别替他选：
 
@@ -27,11 +27,23 @@ CLI 是本目录的 `scripts/setup.py`（Python 标准库，零依赖，不 impo
 | 空图，自己一句句长 | `init --empty --domain <领域目录>`（没有领域目录时用 `--name <领域名>`） |
 | 开发者交付的定制图 | `init --from <定制图.json> [--domain <领域目录>]` |
 
+「整份领域图」指的是律师这台机上那一份活图。它与开发者交付的定制图并存，起手时二选一，不自动合并（ADR-0019）。
+
+**先取领域目录的绝对路径**，调用 skill "loo0ng-domain"：
+
 ```
-python <本目录>/scripts/setup.py init --full --domain <领域目录>
+python <本目录>/../loo0ng-domain/scripts/sketch.py home --name <领域名>
 ```
 
-领域目录在 skill "loo0ng-domain" 的 `assets/<领域名>/`（本 skill 的兄弟目录）：起手时工作区还没有 `AGENTS.md`，路径只能从那里取，取绝对路径。
+（skill "loo0ng-domain" 是本 skill 的兄弟目录；装在别处就用它真的路径。）
+
+它回显的第一行就是路径（`活图：<绝对路径>`）。领域目录住 `~/.loo0ng/领域/<领域名>/`，在 skill 包之外：第一次起手这个领域时它从包内的出厂种子整份拷一份，已经有就一个字不动，律师在它上面累计的东西不会被下一次升级抹掉（ADR-0019）。这个领域既没有它、包里也没有种子时 `home` 会拒，那就空图起手（`--empty --name <领域名>`，不给 `--domain`）。起手时工作区还没有 `AGENTS.md`，路径只能从这条命令取。
+
+```
+python <本目录>/scripts/setup.py init --full --domain <上一条回显的路径>
+```
+
+`--domain` 一律给这个路径，别给 skill 包内 `assets/` 下那份出厂种子：指针块里记下的就是它，之后每一件 skill 都从那一行读。给错了起手会照做并报一句，图与六格都得重来（起手一案一次）。
 
 一条命令落下六格、图与两份视图、起手图上挂到的官方模板原件、工作区指针块，回显逐条说明。官方模板原件住领域目录，起手时按图上挂到的那几件拷进 `模板/官方/`（出件读的是工作区里这一份，见 skill "loo0ng-domain" 与 skill "loo0ng-to-docx" 的正文）；图上没挂的不拷，领域目录里缺原件只报不拒。
 
@@ -45,7 +57,9 @@ python <本目录>/scripts/setup.py init --full --domain <领域目录>
 └── 文书/                     ← <节点标题>/ 出件时才建
 ```
 
-指针块照 [references/工作区AGENTS.md](references/工作区AGENTS.md) 落成工作区根的 `AGENTS.md`（Codex 读）与一行 `@AGENTS.md` 的 `CLAUDE.md`（Claude Code 读），四项：领域名与领域目录绝对路径、图与视图文件名、入口名、「本工作区对 skill 仓库只读」。它由起手图三选一机械推出，不加确认点，之后没有任何 skill 往里写；引擎与别的 skill 要领域目录路径都从这里读。
+指针块照 [references/工作区AGENTS.md](references/工作区AGENTS.md) 落成工作区根的 `AGENTS.md`（Codex 读）与一行 `@AGENTS.md` 的 `CLAUDE.md`（Claude Code 读），四项：领域名与领域目录绝对路径（就是上面取到的那个，在 skill 包之外）、图与视图文件名、入口名、「本工作区对 skill 仓库只读」。它由起手图三选一机械推出，不加确认点，之后没有任何 skill 往里写；引擎与别的 skill 要领域目录路径都从这里读。
+
+**0.1.0 起手的工作区本版不迁移。** 那时落进 `AGENTS.md` 的领域目录路径指着 skill 包内的 `assets/<领域名>/`：包装在不带版本号的目录下（`~/.agents/skills/`）时，升级之后它仍指着那里、仍读得到，只是律师之后在包外那份上改的东西那个工作区看不见；包装在带版本号的目录下时，那条绝对路径本身在升级后就失效了。两种情形都要手改同一行：把 `AGENTS.md` 里「领域目录」那一行换成 `sketch.py home` 回显的路径，图与六格一个字不动。起手一案一次（ADR-0007），本 skill 不回头改任何既有工作区，也不去猜哪一条旧路径该改成什么。
 
 引擎拒了就一格不建、一个字不写：把拒写的原话照读给律师，别自己改 JSON 绕过去。
 
@@ -121,7 +135,7 @@ python <本目录>/scripts/setup.py init --full --domain <领域目录>
 ## 与邻居的边界
 
 - 归档搬运与律师陈述归 skill "loo0ng-filing"；本 skill 只在第 3 步调它，不自己搬文件。
-- 雏形与领域目录归 skill "loo0ng-domain"；本 skill 只在第 4、6 步调它，不自己判重。
+- 雏形与领域目录归 skill "loo0ng-domain"；本 skill 只在第 1、4、6 步调它（第 1 步取领域目录路径），不自己判重，也不自己拷领域目录。
 - 除起手图与既有成品登记外的一切写图归 skill "loo0ng-graph"；本 skill 的两条写入也都经它的引擎子进程。
 - 出一版文书与拍板归 skill "loo0ng-doit"；起手不出件、不确认。
 - 本 skill 不含领域语义：换一个领域只换 `--domain` 指向的目录。

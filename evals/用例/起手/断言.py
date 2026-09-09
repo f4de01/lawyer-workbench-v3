@@ -7,7 +7,8 @@ import pathlib
 import re
 
 CELLS = ["收件箱", "材料", "材料/律师陈述", "指南", "模板/官方", "模板/生成", "文书"]
-DOMAIN_ASSETS = "skills/loo0ng-domain/assets/破产"
+活图末尾 = "领域/破产"                      # ~/.loo0ng/领域/破产（ADR-0019）；eval 里 LOO0NG_HOME 指进临时目录
+出厂种子 = "skills/loo0ng-domain/assets"    # 指针块不该指进这里：包一升级它就被换掉
 成品 = "管理人承诺书（已交法院）.md"
 成品节点 = "管理人承诺书及团队人员"
 新节点 = "联络人备案表"
@@ -53,18 +54,38 @@ def check_图与两份视图都在(workspace, reply):
     assert view["格式版本"] == data["格式版本"], "两份 JSON 的格式版本应一致"
 
 
+def _领域目录(workspace):
+    agents = (workspace / "AGENTS.md").read_text(encoding="utf-8")
+    m = re.search(r"^- 领域目录：(\S+)\s*$", agents, re.M)
+    assert m, "指针块缺领域目录：\n%s" % agents
+    return m.group(1)
+
+
 def check_工作区指针块四项齐全(workspace, reply):
     agents = (workspace / "AGENTS.md").read_text(encoding="utf-8")
     assert re.search(r"^- 领域：破产\s*$", agents, re.M), "指针块缺领域名：\n%s" % agents
-    m = re.search(r"^- 领域目录：(\S+)\s*$", agents, re.M)
-    assert m, "指针块缺领域目录：\n%s" % agents
-    assert m.group(1).replace("\\", "/").endswith(DOMAIN_ASSETS), \
-        "领域目录应是 %s 的绝对路径，实际 %r" % (DOMAIN_ASSETS, m.group(1))
-    assert pathlib.Path(m.group(1)).is_absolute(), "领域目录要写绝对路径，实际 %r" % m.group(1)
+    路径 = _领域目录(workspace)
+    正斜杠 = 路径.replace("\\", "/")
+    assert 正斜杠.endswith(活图末尾), \
+        "领域目录应是活图 <家>/%s 的绝对路径（ADR-0019），实际 %r" % (活图末尾, 路径)
+    assert 出厂种子 not in 正斜杠, \
+        "领域目录指进了 skill 包内的出厂种子（%s）：包一升级律师累计的东西就被抹掉，" \
+        "正是 ADR-0019 要挡的事故。活图路径由 sketch.py home 取，实际 %r" % (出厂种子, 路径)
+    assert pathlib.Path(路径).is_absolute(), "领域目录要写绝对路径，实际 %r" % 路径
     for expected in ("图.json", "图视图.md", "图视图.json", "loo0ng-doit", "只读"):
         assert expected in agents, "指针块里缺 %s：\n%s" % (expected, agents)
     assert (workspace / "CLAUDE.md").read_text(encoding="utf-8").strip() == "@AGENTS.md", \
         "CLAUDE.md 只该有一行 @AGENTS.md"
+
+
+def check_活图已经建起来(workspace, reply):
+    """首次起手拷种子（ADR-0019）：指针块指到哪，那里就该有一份三样齐全的领域目录。"""
+    live = pathlib.Path(_领域目录(workspace))
+    assert live.is_dir(), "指针块指着的活图目录不存在：%s" % live
+    有 = sorted(p.name for p in live.iterdir())
+    assert (live / "领域图.json").is_file(), "活图里没有 领域图.json：%s" % 有
+    assert (live / "模板").is_dir() and (live / "指引手册").is_dir(), \
+        "活图该是出厂种子的整份副本（领域图.json、模板/、指引手册/）：%s" % 有
 
 
 def check_收件箱各归其格(workspace, reply):
