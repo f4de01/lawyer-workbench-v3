@@ -5,7 +5,7 @@
 ## 硬边界（不上桌）
 
 1. **案件材料永不入本仓库**：真实案件材料只存在于仓库外的案件工作区（`D:\Claude\Data\Cases\`）；仓库内所有案件引用只指向外部路径；案件敏感信息不得写入 issue、commit message；机械守门（隐私钩子）见 `docs/adr/0014`。
-2. **办案会话对本仓库只读**：在案件目录上工作的会话不写本仓库（含 `knowledge/`）；判为通用的裁定由开发会话誊入，入库须经第二双眼；案件图里的模块与节点回流领域图的机制见 `docs/adr/0012`。
+2. **办案会话对本仓库只读**：在案件目录上工作的会话不写本仓库（含 `knowledge/`）；判为通用的裁定由开发会话誊入，入库须经第二双眼；案件图里的模块与节点回流领域图的机制见 `docs/adr/0012` 与 `docs/adr/0019`；律师侧逐节点回流写的是 `~/.loo0ng/领域/` 下的活图，在本仓库之外，不破这条只读。
 
 ## 结构不变量（理由在 ADR-0009）
 
@@ -13,7 +13,7 @@
 2. **路由入口表同步**：增删或改名任一入口，必改 `ask-loo0ng` 自持的入口表。
 3. **双旗同步**：编排 skill 与路由同时带 `disable-model-invocation: true` 与 `allow_implicit_invocation: false`；参考 skill 两者都不带。
 4. **relink**：改名、增删 skill 后重跑 `scripts/link-skills.ps1`。
-5. **领域目录三样**：`skills/loo0ng-domain/assets/` 只有领域图、官方模板原件、指引手册原文（ADR-0004）。
+5. **领域目录三样**：`skills/loo0ng-domain/assets/` 只有领域图、官方模板原件、指引手册原文（ADR-0004）；这份是出厂种子，律师的活图在包外（ADR-0019）。
 
 长约定见 `docs/agents/skills.md`。
 
