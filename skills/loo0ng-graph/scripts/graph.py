@@ -634,7 +634,7 @@ class Engine:
     def refuse_if_in_package(self):
         """包内的出厂种子谁都不许写，没有例外（ADR-0020）。挡的是律师侧逐节点回流写进包里：
         那份图下一次 skill 包升级就被整个换掉，累计的东西静默消失，而律师这一侧没有 git 看得见。
-        开发者定制领域图走的是同一条路——办一遍、回流进自己的活图，再入库，入库不经本引擎。
+        开发者定制领域图走的是同一条路：办一遍、回流进自己的活图，再入库，入库不经本引擎。
         只拦写：commit 之前才判，validate 与 views 读种子照旧（起手拿它当领域图来源也照旧）。"""
         if self.kind != "domain" or not in_package(self.graph_path):
             return
