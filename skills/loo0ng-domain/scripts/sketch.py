@@ -9,6 +9,7 @@
   python sketch.py apply     --proposal 雏形.json [--graph 图.json] [--kind case|domain] [--domain ...]
                              [--engine graph.py] [--as-new <标题>]...
   python sketch.py from-case --case 案件图.json --domain 领域图或领域目录 [--out 回流.json]
+  python sketch.py home      --name <领域名> [--live-root <活图根>] [--seed-root <种子根>]
   python sketch.py docx-text <文件.docx>
 
 docx-text 把一份 docx（指南、指引手册）的正文按段落打成纯文本，表格一行一行、格间用 | 隔开；模型整读它来提雏形。
@@ -17,14 +18,18 @@ apply 拍板后跑：待定未定即拒（--as-new 逐条定为新的，定为�
       引擎的回显照抄；案件图上时限只回显不写（ADR-0016）。
 from-case 是回流的第一步（ADR-0012）：从一份案件图里算出「案件图有、领域图没有」且至少一版已确认的模块与节点，
       保留原 id，写成雏形文件；标题的去案件化改写由模型做，再 check / apply --kind domain。
+home 回显活图目录的绝对路径（ADR-0019）：活图不在就从 assets/ 下的出厂种子整个拷一份，已经在就一个字不动。
+      律师累计在活图上的东西住 skill 包之外，包升级只换种子，碰不到活图。
 
 退出码：0 完成；1 拒绝（雏形不合格式、待定未定、引擎拒写、找不到文件）；2 用法错误。
 """
 import argparse
 import difflib
 import json
+import os
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 import unicodedata
@@ -37,6 +42,11 @@ WORD_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 DEFAULT_GRAPH = "图.json"
 DOMAIN_GRAPH_FILENAME = "领域图.json"
 ENGINE_RELATIVE = pathlib.Path("..") / ".." / "loo0ng-graph" / "scripts" / "graph.py"
+SEED_ROOT_RELATIVE = pathlib.Path("..") / "assets"      # 出厂种子，随 skill 包分发（ADR-0019）
+LIVE_HOME_ENV = "LOO0NG_HOME"                            # 活图的「家」，默认 ~/.loo0ng
+LIVE_HOME_DIRNAME = ".loo0ng"
+LIVE_DOMAINS_DIRNAME = "领域"
+STAGING_SUFFIX = ".拷贝中"
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 NO_TEMPLATE = "无"
 TEMPLATE_SOURCES = ("官方", "生成")
@@ -506,6 +516,65 @@ def cmd_from_case(args) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- home（活图，ADR-0019）
+
+def live_root(given: Optional[str] = None) -> pathlib.Path:
+    """活图根：默认 ~/.loo0ng/领域/。环境变量 LOO0NG_HOME 换的是那个「家」（`.loo0ng` 那一层），
+    脚本层单测与 eval 用它把活图挪进临时目录（ADR-0015 只生不存），律师那台机上不设。"""
+    if given:
+        return pathlib.Path(given).resolve()
+    home = os.environ.get(LIVE_HOME_ENV, "").strip()
+    base = pathlib.Path(home) if home else pathlib.Path.home() / LIVE_HOME_DIRNAME
+    return (base / LIVE_DOMAINS_DIRNAME).resolve()
+
+
+def seed_root(given: Optional[str] = None) -> pathlib.Path:
+    """出厂种子根：本 skill 的 assets/，随包分发，升级时整个被换掉。"""
+    if given:
+        return pathlib.Path(given).resolve()
+    return (pathlib.Path(__file__).resolve().parent / SEED_ROOT_RELATIVE).resolve()
+
+
+def copy_seed(seed: pathlib.Path, live: pathlib.Path) -> int:
+    """整份拷过去：先落在同级的临时名上，拷完再改名。拷到一半断了不会留下半份活图，
+    否则下一次起手会把那半份当成「已有活图」再也不补。回件数。"""
+    live.parent.mkdir(parents=True, exist_ok=True)
+    staging = live.parent / ("%s%s-%d" % (live.name, STAGING_SUFFIX, os.getpid()))
+    if staging.exists():
+        shutil.rmtree(staging)
+    try:
+        shutil.copytree(str(seed), str(staging))
+        os.replace(str(staging), str(live))
+    except OSError as e:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise Rejected("拷不动出厂种子 %s：%s。活图没建，一个字没写。" % (seed.as_posix(), e)) from e
+    return sum(1 for x in live.rglob("*") if x.is_file())
+
+
+def cmd_home(args) -> int:
+    name = args.name
+    if name in ("", ".", "..") or "/" in name or "\\" in name or ":" in name:
+        raise Rejected("领域名是一个目录名，不能带路径分隔符，收到 %r" % name)
+    live = live_root(args.live_root) / name
+    seed = seed_root(args.seed_root) / name
+    if live.is_dir():
+        print("活图：%s" % live.as_posix())
+        print("已有活图，一个字没动：律师在这个领域上累计的东西只住这里，skill 包升级只换出厂种子。")
+        return 0
+    if live.exists():
+        raise Rejected("%s 已经存在但不是目录：活图位置被占了，挪开它再起手。" % live.as_posix())
+    if not seed.is_dir():
+        raise Rejected("既没有活图 %s，也没有出厂种子 %s：新领域从空图起手（skill \"loo0ng-setup-case\" 的 "
+                       "init --empty --name %s，不给 --domain），领域目录等它有内容了再建。"
+                       % (live.as_posix(), seed.as_posix(), name))
+    count = copy_seed(seed, live)
+    print("活图：%s" % live.as_posix())
+    print("首次起手：活图位置上还没有这个领域，已从出厂种子 %s 整份拷了 %d 件过去。"
+          % (seed.as_posix(), count))
+    print("往后只认活图：律师改的写在这里，skill 包升级只换种子，碰不到它。")
+    return 0
+
+
 # ---------------------------------------------------------------- CLI
 
 def build_parser() -> argparse.ArgumentParser:
@@ -529,6 +598,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--domain", required=True, help="领域图 JSON 或领域目录")
     p.add_argument("--out", default=None, help="雏形文件落点；不给就打到标准输出")
 
+    p = sub.add_parser("home", help="回显活图目录的绝对路径；没有就从出厂种子拷一份，有就一个字不动")
+    p.add_argument("--name", required=True, help="领域名，如 破产；它就是活图下的目录名")
+    p.add_argument("--live-root", default=None,
+                   help="活图根，默认 ~/.loo0ng/领域（环境变量 %s 换「家」）" % LIVE_HOME_ENV)
+    p.add_argument("--seed-root", default=None, help="出厂种子根，默认本 skill 的 assets/")
+
     p = sub.add_parser("docx-text", help="把一份 docx 的正文打成纯文本（段落一行、表格一行一行）")
     p.add_argument("docx", help="指南或指引手册的 .docx")
     return ap
@@ -541,6 +616,8 @@ def main(argv=None) -> int:
             return cmd_check(args)
         if args.cmd == "apply":
             return cmd_apply(args)
+        if args.cmd == "home":
+            return cmd_home(args)
         if args.cmd == "docx-text":
             return cmd_docx_text(args)
         return cmd_from_case(args)

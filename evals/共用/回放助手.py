@@ -15,6 +15,8 @@ import time
 REPO = pathlib.Path(__file__).resolve().parents[2]
 SETUP = REPO / "skills" / "loo0ng-setup-case" / "scripts" / "setup.py"
 ENGINE = REPO / "skills" / "loo0ng-graph" / "scripts" / "graph.py"
+# 种子直接给包内的出厂种子，不走活图（ADR-0019 的 sketch.py home）：种子要的是一个确定的状态，
+# 拷一份活图只是多一层间接。律师那条路上起手取的是活图，那一条由用例「起手」与脚本层单测管。
 DOMAIN_DIR = REPO / "skills" / "loo0ng-domain" / "assets" / "破产"
 
 

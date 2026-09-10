@@ -12,11 +12,15 @@ import io
 import json
 import pathlib
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "skills" / "loo0ng-setup-case" / "scripts" / "setup.py"
+SKETCH = REPO / "skills" / "loo0ng-domain" / "scripts" / "sketch.py"
+SEED_ASSETS = REPO / "skills" / "loo0ng-domain" / "assets"
 DOMAIN = REPO / "evals" / "领域" / "菜园"
 
 spec = importlib.util.spec_from_file_location("loo0ng_setup", SCRIPT)
@@ -179,6 +183,64 @@ class TemplateCase(Base):
         r = self.cli("init", "--full", "--domain", str(root))
         self.assertEqual(r.code, 0, r)
         self.assertEqual(list((self.ws / "模板" / "官方").iterdir()), [])
+
+
+class 活图Case(Base):
+    """起手落进指针块的领域目录是活图，不是 skill 包内的出厂种子（#90，ADR-0019）。
+
+    这是两件 skill 接在一起的那一处：路径由 skill "loo0ng-domain" 的 sketch.py home 取，
+    起手把它原样记进工作区 AGENTS.md，之后每一件 skill 都从那一行读。
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.roots = pathlib.Path(tempfile.mkdtemp(prefix="setup-live-"))
+        self.addCleanup(shutil.rmtree, self.roots, True)
+        self.seed_root = self.roots / "assets"      # 装成 skill 包内的出厂种子根
+        (self.seed_root / "菜园").mkdir(parents=True)
+        shutil.copy2(DOMAIN / "领域图.json", self.seed_root / "菜园" / "领域图.json")
+        self.live_root = self.roots / "领域"
+
+    def home(self, name="菜园"):
+        r = subprocess.run([sys.executable, str(SKETCH), "home", "--name", name,
+                            "--live-root", str(self.live_root), "--seed-root", str(self.seed_root)],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+        self.assertEqual(r.returncode, 0, r.stderr or r.stdout)
+        return pathlib.Path(r.stdout.splitlines()[0].split("：", 1)[1])
+
+    def test_指针块记的是活图不是种子(self):
+        live = self.home()
+        r = self.cli("init", "--full", "--domain", str(live))
+        self.assertEqual(r.code, 0, r)
+        agents = (self.ws / "AGENTS.md").read_text(encoding="utf-8")
+        self.assertIn("- 领域目录：%s" % live.as_posix(), agents)
+        self.assertNotIn((self.seed_root / "菜园").as_posix(), agents,
+                         "指针块里不该出现出厂种子的路径：律师累计的东西不在那里")
+        self.assertNotIn("assets", agents, "指针块里的领域目录不该指进 skill 包的 assets/")
+
+    def test_起手用的是活图上的内容(self):
+        """活图与种子分家之后，起手读的是活图：改了活图，起手图就跟着变。"""
+        live = self.home()
+        (live / "领域图.json").write_text(json.dumps(
+            {"格式版本": 1, "领域": "菜园", "模块": [
+                {"id": "m-live-only", "标题": "只有活图有的模块", "节点": []}]}, ensure_ascii=False),
+            encoding="utf-8")
+        r = self.cli("init", "--full", "--domain", str(live))
+        self.assertEqual(r.code, 0, r)
+        self.assertEqual(list(self.titles()), ["只有活图有的模块"])
+
+    def test_给了包内种子路径就说一句(self):
+        """只报不拒：开发侧的种子回放与回流本来就直接对着种子跑。"""
+        种子 = SEED_ASSETS / "破产"
+        r = self.cli("init", "--empty", "--domain", str(种子))
+        self.assertEqual(r.code, 0, r)
+        self.assertIn("出厂种子", r.out, "给的是包内种子，起手要说一句：%r" % r)
+        self.assertIn("sketch.py home", r.out, "说了就要给出取活图路径的那条命令：%r" % r)
+
+    def test_给的是活图就不啰嗦(self):
+        live = self.home()
+        r = self.cli("init", "--full", "--domain", str(live))
+        self.assertNotIn("出厂种子", r.out, "给的就是活图，不该报那一句：%r" % r)
 
 
 class RegisterCase(Base):
