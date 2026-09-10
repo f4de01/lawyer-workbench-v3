@@ -31,6 +31,11 @@ from typing import Dict, List, Optional, Tuple
 FORMAT_VERSION = 1  # 图.json 与 图视图.json 共用，同步升（ADR-0011）
 DEFAULT_GRAPH = "图.json"
 DOMAIN_GRAPH_FILENAME = "领域图.json"
+# 包内出厂种子的判据（ADR-0020）。同一套判据在 skill "loo0ng-setup-case" 的 setup.py 里也有一份
+# （那边只报不拒，是起手给错 --domain 时的提示）：改这三个常量或下面 in_package 的判法，要改另一处。
+SEED_ASSETS_DIRNAME = "assets"
+SEED_SKILL_DIRNAME = "loo0ng-domain"
+SEED_ROOT_RELATIVE = pathlib.Path("..") / ".." / SEED_SKILL_DIRNAME / SEED_ASSETS_DIRNAME
 VIEW_MD = "图视图.md"
 VIEW_JSON = "图视图.json"
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
@@ -239,6 +244,20 @@ def write_text_atomic(path: pathlib.Path, text: str) -> None:
             tmp.unlink()
 
 
+def in_package(graph_path: pathlib.Path) -> bool:
+    """这份领域图是不是包内的出厂种子。两条判据取或：兄弟 skill 的 assets/ 下（按本脚本的位置算，
+    装在哪儿都成立），或者目录名摆成 <...>/loo0ng-domain/assets/<领域名>（别处拷来的一份包）。"""
+    d = graph_path.resolve().parent
+    sibling = (pathlib.Path(__file__).resolve().parent / SEED_ROOT_RELATIVE).resolve()
+    try:
+        d.relative_to(sibling)
+        return True
+    except ValueError:
+        pass
+    return (d.parent.name == SEED_ASSETS_DIRNAME
+            and d.parent.parent.name == SEED_SKILL_DIRNAME)
+
+
 def resolve_domain_path(arg: Optional[str]) -> Optional[pathlib.Path]:
     if not arg:
         return None
@@ -343,6 +362,7 @@ class Engine:
         validate_graph(self.data, kind=self.kind, label=self.graph_path.name)
 
     def commit(self):
+        self.refuse_if_in_package()
         validate_graph(self.data, kind=self.kind, label=self.graph_path.name)
         write_json_atomic(self.graph_path, self.data)
         if self.kind == "case":
@@ -610,6 +630,21 @@ class Engine:
     def require_domain_kind(self, what: str):
         if self.kind != "domain":
             raise Rejected("%s只住领域图；案件图不存、不拷贝（ADR-0016）。要改领域图用 --kind domain" % what)
+
+    def refuse_if_in_package(self):
+        """包内的出厂种子谁都不许写，没有例外（ADR-0020）。挡的是律师侧逐节点回流写进包里：
+        那份图下一次 skill 包升级就被整个换掉，累计的东西静默消失，而律师这一侧没有 git 看得见。
+        开发者定制领域图走的是同一条路——办一遍、回流进自己的活图，再入库，入库不经本引擎。
+        只拦写：commit 之前才判，validate 与 views 读种子照旧（起手拿它当领域图来源也照旧）。"""
+        if self.kind != "domain" or not in_package(self.graph_path):
+            return
+        raise Rejected(
+            "这份领域图在 skill 包内（出厂种子 %s），种子谁都不许写（ADR-0020）：包一升级它就被整个换掉。"
+            "律师累计的领域图住包外的活图 ~/.loo0ng/领域/<领域名>/，取它的路径用 skill \"loo0ng-domain\" 的 "
+            "sketch.py home --name <领域名>；这个工作区的领域目录还指着种子的话，"
+            "把 AGENTS.md 里「领域目录」那一行换成它回显的路径（换法见 skill \"loo0ng-setup-case\" 正文），"
+            "换完才写得进去。开发者要改种子，也是先改自己的活图再入库，不在这里写。"
+            % self.graph_path.resolve().parent.as_posix())
 
     def place(self, siblings: List[dict], item: dict, pos: Position):
         siblings.remove(item)
