@@ -24,17 +24,19 @@ SOFTWARE.
 
 ## 覆盖范围：官方模板原件与指引手册原文不在其内
 
-上面的 MIT 许可覆盖的是**本仓库自己的作品**：skill 正文、脚本、文档、测试、以及领域图（`skills/loo0ng-domain/assets/<领域>/领域图.json`）。
+上面的 MIT 许可覆盖的是**本仓库自己的作品**：skill 正文、脚本、文档与测试。
 
-下列文件是**第三方文件，不是本仓库的作品**，随包分发只为让工作台照官方版式出件、按原文整读，**不在上面这份 MIT 许可的覆盖范围内**，各依其自身来源的条款：
+`skills/loo0ng-domain/assets/<领域>/` 下两个目录里的 .docx 是**第三方文件，不是本仓库的作品**，随包分发只为让工作台照官方版式出件、按原文整读：
 
-- `skills/loo0ng-domain/assets/破产/模板/` 下 19 件官方模板原件（.docx）
-- `skills/loo0ng-domain/assets/破产/指引手册/` 下 2 份指引手册原文（.docx）
+- `模板/`：官方模板原件
+- `指引手册/`：指引手册原文
 
-本仓库对这些文件不主张任何权利，也不代其来源方授予任何许可。要再分发、改编或商用它们，须自行向其来源方确认条款。
+它们**不在上面这份 MIT 许可的覆盖范围内**，各依其自身来源的条款。本仓库对它们不主张任何权利，也不代其来源方授予任何许可；要再分发、改编或商用，须自行向其来源方确认条款。
 
-The MIT license above covers this repository's own work only. The official
-document templates and practice handbooks shipped under
-`skills/loo0ng-domain/assets/<domain>/{模板,指引手册}/` are third-party files,
-are not works of this repository, and are NOT licensed under the terms above;
-each remains subject to the terms of its own source.
+介于两者之间的只有同目录下的 `领域图.json`：图这个文件是本仓库的作品，其中的节点标题取自上述第三方原件的名目，本仓库不对这些名目本身主张权利。
+
+The MIT license above covers this repository's own work only. The .docx files
+under `skills/loo0ng-domain/assets/<domain>/模板/` (official document templates)
+and `.../指引手册/` (practice handbooks) are third-party files, are not works of
+this repository, and are NOT licensed under the terms above; each remains
+subject to the terms of its own source.
