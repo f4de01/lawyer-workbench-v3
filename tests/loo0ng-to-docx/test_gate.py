@@ -164,6 +164,38 @@ class NormalAndFaultPairs(GateCase):
         bad = rewrite(good, self.dir / "表宽.docx", {"word/document.xml": widen})
         self.assert_fail(bad, "表宽超页面")
 
+    def test_template_table_dropped_needs_template(self):
+        """模板有表而成品没表即不通过（#107）。
+
+        真事故：模型为了过「行高超阈值」，把模板规定的那张表整个改写成正文段落，
+        几何违规随表一起消失、门禁给通过，交出去的是一份缺了正文结构的件。
+        钉子只在稿子里有表时才落进成品，所以这一项必须由门禁自己拦，不能指望种子。
+        """
+        tpl = template("1-2.")
+        表 = fixture("印章备案.md")
+        管道表 = "\n".join([
+            "| 印章名称 | 乙公司管理人章、乙公司管理人财务专用章 |",
+            "|---|---|",
+            "| 印模 |  |",
+            "| 启用时间 | 甲年乙月丙日 |",
+        ])
+        段落 = "\n\n".join([
+            "印章名称：乙公司管理人章、乙公司管理人财务专用章",
+            "印模：",
+            "启用时间：甲年乙月丙日",
+        ])
+        self.assertIn(管道表, 表, "fixture 里那张管道表的写法变了，改这里")
+        无表 = 表.replace(管道表, 段落)
+
+        good = self.build(表, tpl, "有表.docx")
+        self.assert_pass(good, "--template", tpl)
+
+        bad = self.build(无表, tpl, "无表.docx")
+        self.assert_fail(bad, "模板表缺失", "--template", tpl)
+        r = self.gate(bad)
+        self.assertEqual(r.code, 0, "没有模板可比时，成品没表不算错")
+        self.assertIn("未给 --template", item_names(r.result, "披露项"))
+
     def test_placeholder_leftover(self):
         docx = self.build(fixture("占位残留.md"), template("1-2."))
         r = self.assert_fail(docx, "模板占位残留")
