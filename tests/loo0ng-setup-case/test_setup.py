@@ -10,6 +10,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -22,6 +23,7 @@ SCRIPT = REPO / "skills" / "loo0ng-setup-case" / "scripts" / "setup.py"
 SKETCH = REPO / "skills" / "loo0ng-domain" / "scripts" / "sketch.py"
 SEED_ASSETS = REPO / "skills" / "loo0ng-domain" / "assets"
 DOMAIN = REPO / "evals" / "领域" / "菜园"
+LIVE_HOME_ENV = "LOO0NG_HOME"   # 活图的「家」，与 sketch.py、eval 跑器同一个名字
 
 spec = importlib.util.spec_from_file_location("loo0ng_setup", SCRIPT)
 setup = importlib.util.module_from_spec(spec)
@@ -241,6 +243,94 @@ class 活图Case(Base):
         live = self.home()
         r = self.cli("init", "--full", "--domain", str(live))
         self.assertNotIn("出厂种子", r.out, "给的就是活图，不该报那一句：%r" % r)
+
+
+class 一条命令Case(Base):
+    """律师侧起手只打一条命令：init 自己子进程调 sketch.py home 取活图路径（#97，ADR-0019）。
+
+    `--domain-name <领域名>` 给领域名，路径由 init 自己取；`--domain <路径>` 留给开发侧
+    （种子回放、开发者定制图）。活图家用 LOO0NG_HOME 挪进临时目录（ADR-0015 只生不存），
+    永远不碰律师真的 ~/.loo0ng。
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.home = pathlib.Path(tempfile.mkdtemp(prefix="setup-home-"))
+        self.addCleanup(shutil.rmtree, self.home, True)
+        旧 = os.environ.get(LIVE_HOME_ENV)
+        os.environ[LIVE_HOME_ENV] = str(self.home)
+        self.addCleanup(self.还原活图家, 旧)
+
+    def 还原活图家(self, 旧):
+        if 旧 is None:
+            os.environ.pop(LIVE_HOME_ENV, None)
+        else:
+            os.environ[LIVE_HOME_ENV] = 旧
+
+    def 摆一份活图(self, name="菜园"):
+        live = self.home / "领域" / name
+        live.mkdir(parents=True)
+        shutil.copy2(DOMAIN / "领域图.json", live / "领域图.json")
+        return live
+
+    def test_一条命令起手指针块记的就是活图(self):
+        live = self.摆一份活图()
+        r = self.cli("init", "--full", "--domain-name", "菜园")
+        self.assertEqual(r.code, 0, r)
+        agents = (self.ws / "AGENTS.md").read_text(encoding="utf-8")
+        self.assertIn("- 领域目录：%s" % live.as_posix(), agents,
+                      "律师只打了这一条命令，指针块记的仍该是活图")
+        self.assertNotIn("assets", agents, "指针块里的领域目录不该指进 skill 包的 assets/")
+        self.assertEqual(self.graph()["领域"], "菜园")
+        self.assertTrue(self.titles(), "--full 该按活图上那份领域图整份起手")
+
+    def test_首次起手一条命令就把出厂种子拷成活图(self):
+        """活图位置上还没有这个领域时，那一条命令自己把三样拷出来（#90 的验收项经这条路仍绿）。"""
+        r = self.cli("init", "--empty", "--domain-name", "破产")
+        self.assertEqual(r.code, 0, r)
+        live = self.home / "领域" / "破产"
+        self.assertTrue((live / "领域图.json").is_file(), "首次起手该把出厂种子整份拷成活图")
+        self.assertTrue((live / "模板").is_dir() and (live / "指引手册").is_dir(),
+                        "活图该是出厂种子的整份副本：%s" % sorted(p.name for p in live.iterdir()))
+        self.assertIn("- 领域目录：%s" % live.as_posix(),
+                      (self.ws / "AGENTS.md").read_text(encoding="utf-8"))
+        self.assertIn("活图", r.out, "home 的回显该照抄给律师：%r" % r)
+
+    def test_两种传法不能同时给(self):
+        r = self.cli("init", "--full", "--domain", str(DOMAIN), "--domain-name", "菜园")
+        self.assertEqual(r.code, 1, r)
+        self.assertFalse((self.ws / "图.json").exists(), "拒绝时不该落图")
+        self.assertFalse((self.ws / "AGENTS.md").exists(), "拒绝时不该写指针块")
+        self.assertFalse((self.ws / "收件箱").exists(), "拒绝时不该建六格")
+
+    def test_取不到活图就一格不建一个字不写(self):
+        """活图与出厂种子都没有的领域，home 拒，起手跟着拒：此时还什么都没写。"""
+        r = self.cli("init", "--empty", "--domain-name", "还没有这个领域")
+        self.assertEqual(r.code, 1, r)
+        self.assertIn("活图", r.err, "该把 home 拒的原话照抄出来：%r" % r)
+        self.assertFalse((self.ws / "图.json").exists())
+        self.assertFalse((self.ws / "AGENTS.md").exists())
+        self.assertFalse((self.ws / "收件箱").exists())
+
+    def test_开发侧给路径那条路不碰活图家(self):
+        """--domain 给路径时 init 不去调 home：种子回放与定制图那条路一个字没动。"""
+        r = self.cli("init", "--full", "--domain", str(DOMAIN))
+        self.assertEqual(r.code, 0, r)
+        self.assertFalse((self.home / "领域").exists(), "给了 --domain 就不该再去取活图")
+        self.assertIn("- 领域目录：%s" % DOMAIN.as_posix(),
+                      (self.ws / "AGENTS.md").read_text(encoding="utf-8"))
+
+    def test_定制图也能只给领域名(self):
+        live = self.摆一份活图()
+        custom = self.home / "定制图.json"
+        custom.write_text(json.dumps({"格式版本": 1, "领域": "菜园", "模块": [
+            {"id": "m-only", "标题": "只有定制图有的模块", "节点": []}]}, ensure_ascii=False),
+            encoding="utf-8")
+        r = self.cli("init", "--from", str(custom), "--domain-name", "菜园")
+        self.assertEqual(r.code, 0, r)
+        self.assertEqual(list(self.titles()), ["只有定制图有的模块"])
+        self.assertIn("- 领域目录：%s" % live.as_posix(),
+                      (self.ws / "AGENTS.md").read_text(encoding="utf-8"))
 
 
 class RegisterCase(Base):
