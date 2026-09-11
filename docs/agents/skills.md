@@ -188,3 +188,13 @@ MSYS_NO_PATHCONV=1 CLAUDECODE= CLAUDE_CODE_ENTRYPOINT= \
 - 本机验证插件路线不必推分支：`claude plugin marketplace add <本仓库绝对路径>` 再 `claude plugin install loo0ng-skills@loo0ng-marketplace`，`claude -p "/loo0ng-skills:<name>"` 可触发；验完 `claude plugin uninstall` 与 `claude plugin marketplace remove loo0ng-marketplace`（#24）。
 - skills.sh：`npx skills@latest add owner/repo` 只取默认分支，分支名含 `/` 时解析失败。
 - junction 与插件同装时 Codex 清单同名两条、不合并；Claude Code 靠 `plugin:` 前缀分开。
+
+## 安装源必须是公开仓库（#94，2026-09-09 律师机现场）
+
+私有仓库在律师那台 mac 上一条安装路都没走通，最后是把本仓库转成 public 才装上的（`docs/实测/mac-20260909/结论.md`）。上面分发事实里那条「对私有仓库都吃本机凭据」只在开发机上验过，**不是分发面的口径**，别拿它去现场。
+
+这是一条约束，不是一处笔误：它把将来任何「把主仓库转私有」的设想框住了。真要藏开发内容，就得拆出一个公开的分发仓库，而那要付三样代价：
+
+1. **两仓同步**：`skills/` 与两份插件清单得有一条机械的搬运，人手搬迟早漏。
+2. **登记不变量跨仓库**：`AGENTS.md` 结构不变量 1 的三处登记（`skills/<name>/`、`.claude-plugin/plugin.json`、`README.md`）会落在两个仓库里，上面那三条校验命令不再是在一个工作副本上跑得完的。
+3. **入口显示名可能变**：Codex 显示裸名还是 `loo0ng-skills:<名>`，取决于装到 `~/.agents/skills/` 的目录上面找不找得到 `.codex-plugin/plugin.json`（`docs/交付/现场清单.md` 1.5 的实测）。分发仓库若只搬 `skills/` 不搬那份清单，律师看见的名字就从带前缀变成裸名，`ask-loo0ng` 的入口表与打法段跟着要改。
