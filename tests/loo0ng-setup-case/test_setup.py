@@ -230,7 +230,7 @@ class 活图Case(Base):
         self.assertEqual(list(self.titles()), ["只有活图有的模块"])
 
     def test_给了包内种子路径就说一句(self):
-        """只报不拒：开发侧的种子回放与回流本来就直接对着种子跑。"""
+        """只报不拒：起手是读，开发侧的种子回放本来就直接对着种子起手；写那一刻由引擎拒（ADR-0020）。"""
         种子 = SEED_ASSETS / "破产"
         r = self.cli("init", "--empty", "--domain", str(种子))
         self.assertEqual(r.code, 0, r)
