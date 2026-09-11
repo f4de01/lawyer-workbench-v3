@@ -24,8 +24,8 @@ CLI 是本目录的 `scripts/setup.py`（Python 标准库，零依赖，不 impo
 | 律师要 | 命令 |
 | --- | --- |
 | 整份领域图（本领域全套模块与节点，最常见） | `init --full --domain-name <领域名>` |
-| 空图，自己一句句长 | `init --empty --domain-name <领域名>` |
-| 开发者交付的定制图 | `init --from <定制图.json> --domain-name <领域名>` |
+| 空图，自己一句句长 | `init --empty --domain-name <领域名>`（这个领域连出厂种子都还没有时用 `--empty --name <领域名>`） |
+| 开发者交付的定制图 | `init --from <定制图.json> [--domain-name <领域名>]`（定制图自带领域名，没有领域目录也起得来） |
 
 「整份领域图」指的是律师这台机上那一份活图。它与开发者交付的定制图并存，起手时二选一，不自动合并（ADR-0019）。
 

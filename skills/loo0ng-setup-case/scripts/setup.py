@@ -230,6 +230,9 @@ def cmd_init(args) -> int:
     if args.domain and args.domain_name:
         raise Rejected("--domain-name 与 --domain 二选一：律师侧给 --domain-name <领域名>，活图路径由本脚本"
                        "自己取；开发侧给 --domain <路径>（种子回放、开发者定制图）。")
+    if args.domain_name and args.name:
+        raise Rejected("--domain-name 已经给了领域名，不要再给 --name：两个给成不一样的，指针块的「领域」"
+                       "与「领域目录」会各指一处。要另起一个领域名就改用 --domain <路径> 加 --name。")
     if args.full and not (args.domain or args.domain_name):
         raise Rejected("--full 要带 --domain-name <领域名>，或带 --domain 指向领域目录或其中的 %s"
                        % DOMAIN_GRAPH_FILENAME)
@@ -351,7 +354,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--sketch", default=None,
                    help="sketch.py 的路径，默认取兄弟 skill loo0ng-domain 里的")
     p.add_argument("--name", default=None,
-                   help="领域名；空图起手又没有 --domain / --domain-name 时必填")
+                   help="领域名；空图起手又没有 --domain / --domain-name 时必填。与 --domain-name 不并存")
 
     p = sub.add_parser("register", parents=[common], help="把既有成品登记为已生成、来源律师")
     p.add_argument("--node", required=True, help="节点标题")
