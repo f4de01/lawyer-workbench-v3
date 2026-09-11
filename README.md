@@ -16,7 +16,7 @@
 /plugin install loo0ng-skills@loo0ng-marketplace
 ```
 
-`owner/repo` 形式只取默认分支；要装某个分支，用 `https://github.com/f4de01/lawyer-workbench-v3.git#<branch>`。私有仓库凭本机 gh 或 git 凭据克隆。装上后 skill 名带 `loo0ng-skills:` 前缀，例如 `/loo0ng-skills:ask-loo0ng`。
+`owner/repo` 形式只取默认分支；要装某个分支，用 `https://github.com/f4de01/lawyer-workbench-v3.git#<branch>`。**安装源须是公开仓库**：「私有仓库凭本机 gh 或 git 凭据克隆」只在开发机上验过，律师那台 mac 上私有仓库一条都没走通，本仓库为此转成了 public（`docs/实测/mac-20260909/结论.md`）。装上后 skill 名带 `loo0ng-skills:` 前缀，例如 `/loo0ng-skills:ask-loo0ng`。
 
 </details>
 
@@ -27,7 +27,7 @@
 npx skills@latest add f4de01/lawyer-workbench-v3 -a codex -a claude-code
 ```
 
-安装器让你挑 skill 与目标 agent；`-a` 可重复，一次装到两个 harness。`.codex-plugin/plugin.json` 指向 `skills/`，也可经 Codex 插件市场安装（`codex plugin marketplace add`，再 `codex plugin add`）。
+**安装源同样须是公开仓库**：律师那台 mac 上这一条对私有仓库失败过三次，转 public 之后才装上（`docs/实测/mac-20260909/结论.md`）。安装器让你挑 skill 与目标 agent；`-a` 可重复，一次装到两个 harness。`.codex-plugin/plugin.json` 指向 `skills/`，也可经 Codex 插件市场安装（`codex plugin marketplace add`，再 `codex plugin add`）。
 
 </details>
 
