@@ -15,7 +15,8 @@ PyMuPDF 是可选件，只在拿到渲染结果时才 import。缺 Word / WPS / 
 不通过项（客观几何与结构，任一命中即不通过）：
   行高超阈值、页数超阈值（长标记撑列）；空白页（只有页码的页也算）；表宽超页面；页脚 PAGE 域写死（有
   --template 时还查丢失）；表格直接接 sectPr；docProps 残留作者 / 最后修改者 / 上次打印时间；正文残留模板
-  占位标记（XX、【】等），有 --template 时还查模板里括号说明段整段残留。
+  占位标记（XX、【】等），有 --template 时还查模板里括号说明段整段残留；模板有表而成品一张表都没有（同样
+  要有 --template）。
 披露项（写进审查报告，不判不通过）：空单元格坐标；页数；无渲染结果时的那一条；有渲染结果时另有请求字体
   不在嵌入字体里、正文有字没渲出来（无渲染时这两条整条消失，不报「无」）。
 
@@ -279,6 +280,8 @@ def static_checks(doc: Docx, template: Optional[Docx]) -> Tuple[List[str], List[
                 leftover_notes.append(t[:20])
         if leftover_notes:
             fails.append("模板原文残留：%s" % "、".join(leftover_notes))
+        if template.tables() and not doc.tables():
+            fails.append("模板表缺失：模板有 %d 张表，成品一张都没有" % len(template.tables()))
 
     footers = doc.footers()
     has_field = any(_footer_has_page_field(f) for f in footers)
@@ -971,7 +974,7 @@ def run_gate(docx_path: pathlib.Path, template_path: Optional[pathlib.Path], max
     fails += verdicts["不通过项"]
     notes += verdicts["披露项"] + outliers
     if template is None:
-        notes.append("未给 --template：没查页脚 PAGE 域丢失与模板说明段残留")
+        notes.append("未给 --template：没查页脚 PAGE 域丢失、模板说明段残留与模板表缺失")
     conclusion = "不通过" if fails else ("需人眼" if needs else "通过")
     return {
         "文件": str(docx_path),
@@ -1019,7 +1022,7 @@ def format_report(result: Dict[str, object]) -> str:
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="gate.py", description="版式门禁：静态检查加版面推算，有渲染时以渲染加信；只读，不合格不落盘。")
     ap.add_argument("docx", help="要检查的文书（.docx）")
-    ap.add_argument("--template", help="该节点的官方模板，给了才查页脚 PAGE 域丢失与模板说明段残留")
+    ap.add_argument("--template", help="该节点的官方模板，给了才查页脚 PAGE 域丢失、模板说明段残留与模板表缺失")
     ap.add_argument("--deliver", help="通过与需人眼两档把文书一次性拷到这个路径（已存在则拒绝）")
     ap.add_argument("--json", action="store_true", help="结果按 JSON 打印")
     ap.add_argument("--max-pages", type=int, default=DEFAULT_MAX_PAGES, help="页数阈值，默认 %(default)s")
