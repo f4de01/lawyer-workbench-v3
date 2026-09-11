@@ -90,8 +90,9 @@ def looks_like_seed(domain_dir: pathlib.Path) -> bool:
 
 
 def seed_path_note(domain_dir: Optional[pathlib.Path]) -> List[str]:
-    """--domain 指到 skill 包内的出厂种子上时说一句（ADR-0019）。只报不拒：开发侧的种子回放与
-    回流本来就直接对着种子跑；错在律师起手上时，这一行是它唯一会露头的地方。"""
+    """--domain 指到 skill 包内的出厂种子上时说一句（ADR-0019）。只报不拒：起手是读，开发侧的种子回放
+    本来就直接对着种子起手；写那一刻另有引擎无条件拒着（ADR-0020），这里不必再拦一次。
+    错在律师起手上时，这一行是它唯一会露头的地方。"""
     if domain_dir is None or not looks_like_seed(domain_dir):
         return []
     return ["注意：--domain 给的是 skill 包内的出厂种子，不是活图（ADR-0019）：包一升级它就被换掉，"

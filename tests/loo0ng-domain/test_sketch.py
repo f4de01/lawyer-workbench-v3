@@ -409,6 +409,80 @@ class FromCaseTest(SketchCase):
         self.assertEqual({m["id"], m["节点"][0]["id"]}, case_ids, "回流保留案件里的原 id")
 
 
+# ---------------------------------------------------------------- 两条路的终点都是活图（ADR-0020）
+
+class LiveGraphIsTheTargetTest(SketchCase):
+    """开发侧那两条路写的也是活图（#102 验收，ADR-0020）：`home` 回显的那个目录是 `apply` 的落点，
+    包内出厂种子一个字节不动。
+
+    种子一律用临时的假包（目录名摆成 `<...>/loo0ng-domain/assets/<领域名>`，判据 ②），
+    与 tests/loo0ng-graph/test_package_guard.py 同一个理由：拿真包测就是拿开发者的工作树赌一次规则，
+    规则坏了它会被写脏。真包落在判据 ① 射程里由那份测试钉住。
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.seed_root = self.tmp / "loo0ng-domain" / "assets"
+        (self.seed_root / "菜园").mkdir(parents=True)
+        self.seed = self.seed_root / "菜园" / "领域图.json"
+        shutil.copy(DOMAIN_DIR / "领域图.json", self.seed)
+        self.live_root = self.tmp / "活图根" / "领域"
+
+    def home(self):
+        r = self.cli("home", "--name", "菜园", "--live-root", self.live_root, "--seed-root", self.seed_root)
+        self.assertEqual(r.code, 0, r)
+        第一行 = r.out.splitlines()[0]
+        self.assertTrue(第一行.startswith("活图："), "home 的第一行该是活图路径：%r" % 第一行)
+        return pathlib.Path(第一行.split("：", 1)[1])
+
+    def test_apply_writes_the_live_graph_home_echoes_and_leaves_the_seed_untouched(self):
+        live = self.home()
+        种子字节 = self.seed.read_bytes()
+        self.write_proposal([{"标题": "养护", "id": "m-yanghu", "节点": [
+            {"标题": "补种", "id": "n-buzhong", "空白模板": "无"},
+            {"标题": "打顶", "id": "n-dading", "空白模板": "无"}]}])
+        r = self.cli("apply", "--proposal", self.proposal_path, "--graph", live / "领域图.json",
+                     "--kind", "domain", "--engine", ENGINE)
+        self.assertEqual(r.code, 0, r)
+        self.assertEqual(self.titles(live / "领域图.json")["养护"],
+                         ["浇水", "除草", "搭架", "补种", "打顶"], "活图该多出那两条")
+        self.assertEqual(self.seed.read_bytes(), 种子字节,
+                         "开发侧那条路写的是活图，包内出厂种子一个字节都不该动（ADR-0020）")
+
+    def test_the_same_apply_aimed_at_the_seed_is_refused_by_the_engine(self):
+        """上一条那个「种子字节不变」不是因为没人写它：同一份雏形冲着种子跑，引擎无条件拒。"""
+        self.home()
+        种子字节 = self.seed.read_bytes()
+        self.write_proposal([{"标题": "养护", "id": "m-yanghu", "节点": [
+            {"标题": "补种", "id": "n-buzhong", "空白模板": "无"}]}])
+        r = self.cli("apply", "--proposal", self.proposal_path, "--graph", self.seed,
+                     "--kind", "domain", "--engine", ENGINE)
+        self.assertEqual(r.code, 1, r)
+        self.assertIn("ADR-0020", r.err, "引擎那条拒该被照抄出来：%r" % r.err)
+        self.assertEqual(self.seed.read_bytes(), 种子字节)
+
+    def test_from_case_against_the_live_graph_never_touches_the_seed(self):
+        """补历史那条路：`from-case --domain <活图>`，算候选、判重、写入，终点都是活图。"""
+        self.full_case_graph()
+        g = ["--graph", self.graph_path, "--domain", DOMAIN_DIR]
+        engine(*g, "add-node", "--module", "养护", "--title", "补种记录")
+        engine(*g, "generate", "--node", "补种记录", "--doc", "文书/补种/补种-v1.docx",
+               "--review", "文书/补种/补种-v1-审查报告.md")
+        engine(*g, "confirm", "--node", "补种记录", "--words", "确认")
+        case_id = self.node("补种记录")["id"]
+        live = self.home()
+        种子字节 = self.seed.read_bytes()
+        out_path = self.tmp / "回流.json"
+        r = self.cli("from-case", "--case", self.graph_path, "--domain", live, "--out", out_path)
+        self.assertEqual(r.code, 0, r)
+        r = self.cli("apply", "--proposal", out_path, "--graph", live / "领域图.json",
+                     "--kind", "domain", "--engine", ENGINE)
+        self.assertEqual(r.code, 0, r)
+        self.assertEqual(self.node("补种记录", live / "领域图.json")["id"], case_id,
+                         "回流保留案件里的原 id（ADR-0012）")
+        self.assertEqual(self.seed.read_bytes(), 种子字节, "补历史那条路也不碰出厂种子")
+
+
 # ---------------------------------------------------------------- docx-text：整读指南与手册
 
 DOCUMENT_XML = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
