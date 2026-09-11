@@ -27,7 +27,7 @@
 npx skills@latest add f4de01/lawyer-workbench-v3 -a codex -a claude-code
 ```
 
-安装器让你挑 skill 与目标 agent；`-a` 可重复，一次装到两个 harness。`.codex-plugin/plugin.json` 指向 `skills/`，也可经 Codex 插件市场安装（`codex plugin marketplace add`，再 `codex plugin add`）。
+**安装源同样须是公开仓库**：律师那台 mac 上这一条对私有仓库失败过三次，转 public 之后才装上（`docs/实测/mac-20260909/结论.md`）。安装器让你挑 skill 与目标 agent；`-a` 可重复，一次装到两个 harness。`.codex-plugin/plugin.json` 指向 `skills/`，也可经 Codex 插件市场安装（`codex plugin marketplace add`，再 `codex plugin add`）。
 
 </details>
 

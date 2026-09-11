@@ -184,7 +184,7 @@ MSYS_NO_PATHCONV=1 CLAUDECODE= CLAUDE_CODE_ENTRYPOINT= \
 ## 分发事实（#18，2026-09-05 实测）
 
 - junction 路线：两个 harness 都扫到；Claude Code 会话内热加载；Codex 从 junction 解析出真实路径后向上找到 `.codex-plugin/plugin.json`，把名字显示成 `loo0ng-skills:<name>`。
-- 插件路线：`claude plugin marketplace add` 与 `codex plugin marketplace add … --ref` 对私有仓库都吃本机凭据，缓存是整仓库拷贝。
+- 插件路线：`claude plugin marketplace add` 与 `codex plugin marketplace add … --ref` 对私有仓库都吃本机凭据，缓存是整仓库拷贝。**这条只在开发机上成立**，别当分发口径，见下面「安装源必须是公开仓库」。
 - 本机验证插件路线不必推分支：`claude plugin marketplace add <本仓库绝对路径>` 再 `claude plugin install loo0ng-skills@loo0ng-marketplace`，`claude -p "/loo0ng-skills:<name>"` 可触发；验完 `claude plugin uninstall` 与 `claude plugin marketplace remove loo0ng-marketplace`（#24）。
 - skills.sh：`npx skills@latest add owner/repo` 只取默认分支，分支名含 `/` 时解析失败。
 - junction 与插件同装时 Codex 清单同名两条、不合并；Claude Code 靠 `plugin:` 前缀分开。
@@ -197,4 +197,4 @@ MSYS_NO_PATHCONV=1 CLAUDECODE= CLAUDE_CODE_ENTRYPOINT= \
 
 1. **两仓同步**：`skills/` 与两份插件清单得有一条机械的搬运，人手搬迟早漏。
 2. **登记不变量跨仓库**：`AGENTS.md` 结构不变量 1 的三处登记（`skills/<name>/`、`.claude-plugin/plugin.json`、`README.md`）会落在两个仓库里，上面那三条校验命令不再是在一个工作副本上跑得完的。
-3. **入口显示名可能变**：Codex 显示裸名还是 `loo0ng-skills:<名>`，取决于装到 `~/.agents/skills/` 的目录上面找不找得到 `.codex-plugin/plugin.json`（`docs/交付/现场清单.md` 1.5 的实测）。分发仓库若只搬 `skills/` 不搬那份清单，律师看见的名字就从带前缀变成裸名，`ask-loo0ng` 的入口表与打法段跟着要改。
+3. **入口显示名可能从裸名变成带前缀**：Codex 显示裸名还是 `loo0ng-skills:<名>`，取决于装到 `~/.agents/skills/` 的那个目录上面找不找得到 `.codex-plugin/plugin.json`（`docs/交付/现场清单.md` 1.5 的实测）。律师那台机器走的是路 A，直接拷目录，现在看见的是**裸名**；拆出分发仓库之后若改走那个仓库的插件市场装，同一件 skill 就显示成 `loo0ng-skills:<名>`，`ask-loo0ng` 的入口表、打法段与教律师打的那一串跟着都要改。
