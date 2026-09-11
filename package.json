@@ -7,7 +7,7 @@
     "type": "git",
     "url": "https://github.com/f4de01/lawyer-workbench-v3.git"
   },
-  "license": "UNLICENSED",
+  "license": "MIT",
   "scripts": {
     "changeset": "changeset",
     "version": "changeset version && python scripts/sync-plugin-version.py",
