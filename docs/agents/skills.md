@@ -75,7 +75,7 @@ git ls-files -z | grep -z -v '\.ps1$' | xargs -0 grep -l -I $'^\xEF\xBB\xBF'
 # BOM：每个 .ps1 首三字节须为 ef bb bf
 for f in scripts/*.ps1; do printf '%s ' "$f"; head -c 3 "$f" | od -An -tx1; done
 
-# 三处版本一致
+# 版本一致：两份插件清单与 package-lock.json 跟上 package.json
 npm run check-plugin-version
 
 # agents/openai.yaml 与 SKILL.md frontmatter 同步，期望退出码 0
@@ -179,7 +179,7 @@ MSYS_NO_PATHCONV=1 CLAUDECODE= CLAUDE_CODE_ENTRYPOINT= \
 
 ## 发布
 
-改名、改功能都是一次发布，只在开发者维护时做（ADR-0009）：`npm run changeset` 写条目，`npm run version` 合成 `CHANGELOG.md`、升 `package.json` 并同步两份插件清单的版本，提交、打 tag。流程细节在 `.changeset/README.md`。
+改名、改功能都是一次发布，只在开发者维护时做（ADR-0009）：`npm run changeset` 写条目，`npm run version` 合成 `CHANGELOG.md`、升 `package.json` 并同步两份插件清单与 `package-lock.json` 的版本，提交、打 tag。流程细节在 `.changeset/README.md`。
 
 ## 分发事实（#18，2026-09-05 实测）
 
