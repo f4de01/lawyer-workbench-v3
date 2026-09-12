@@ -100,9 +100,10 @@ python scripts/skill-eval.py --harness codex                  # Codex 侧，走 
 python scripts/skill-eval.py --harness claude --case 冒烟     # 只跑一个用例；--case 可重复
 python scripts/skill-eval.py --harness codex --runs 3         # 怀疑抖动时多跑几次
 python scripts/skill-eval.py --harness claude --evals evals/自检   # 跑器自检用例（故意失败），不进门槛
+python scripts/skill-eval.py --harness claude --case 回流 --model opus --effort high   # 换模型跑
 ```
 
-Codex 侧提示词经 stdin 送入（`PROMPT` 位置是 `-`）：PATH 上的 `codex` 是 npm 的 `.cmd` 垫片，cmd.exe 会把参数里第一个换行之后的字吞掉，多行提示词（如带一段稿子的「出一版」用例）只剩第一行（#28）。其他参数：`--max-turns N`、`--timeout 秒` 覆盖用例里的值；`--keep` 跑完不删工作区，只为排障。退出码 0 全绿、1 有红、2 用法或用例配置错。结果只打印不进仓库。从 Claude Code 会话内跑 `--harness claude` 不用自己去环境变量：跑器已去掉 `CLAUDECODE` 两项并带上 `MSYS_NO_PATHCONV=1`。
+Codex 侧提示词经 stdin 送入（`PROMPT` 位置是 `-`）：PATH 上的 `codex` 是 npm 的 `.cmd` 垫片，cmd.exe 会把参数里第一个换行之后的字吞掉，多行提示词（如带一段稿子的「出一版」用例）只剩第一行（#28）。其他参数：`--max-turns N`、`--timeout 秒` 覆盖用例里的值；`--keep` 跑完不删工作区，只为排障；`--model` 与 `--effort` 透传给各自的 CLI（Claude Code 侧 `--model`/`--effort`，Codex 侧 `-m` 加一条 `-c model_reasoning_effort=...`），两个都不给时走 CLI 自己的默认（Codex 读 `~/.codex/config.toml`），这是既有跑法的兼容线；这次用的是哪个，跑器回显第一行报出来，跨跑比较才读得出结果是哪个模型跑的。退出码 0 全绿、1 有红、2 用法或用例配置错。结果只打印不进仓库。从 Claude Code 会话内跑 `--harness claude` 不用自己去环境变量：跑器已去掉 `CLAUDECODE` 两项并带上 `MSYS_NO_PATHCONV=1`。
 
 ### `evals/` 目录
 
@@ -113,11 +114,11 @@ evals/
 │   ├── 用例.json        # 见下
 │   └── 断言.py          # check_ 开头的函数各是一条断言，签名 (workspace: Path, reply: str)，assert 判真伪
 ├── 自检/<名>/           # 只测跑器自己的用例（如 故意失败），同格式，用 --evals evals/自检 跑
-├── 种子/<场景>/         # 收件箱/ 等直接拷进工作区的东西 + 回放.py + 状态.md；除「空目录」外每个回放都以真的起手 CLI 开头（#31；「逐节点回流」与「活图多一件」先跑 `sketch.py home` 取活图路径，再拿它 `init`）
+├── 种子/<场景>/         # 收件箱/ 等直接拷进工作区的东西 + 回放.py + 状态.md；除「空目录」外每个回放都以真的起手 CLI 开头（#31；「逐节点回流」「活图多一件」「回流」先跑 `sketch.py home` 取活图路径，前两个再拿它 `init`，「回流」的案件那一层仍按包内出厂种子起手、活图只作回流的目标）
 ├── 共用/                # 跨用例、跨种子共用的几个模块，不是用例也不是种子（跑器按目录里有没有 用例.json 认用例，扫不到这里）：
 │                        #   回放助手.py 七个路由种子共用的起手与写图动作（用活图() 把领域目录从包内种子换成一份活图，ADR-0019）；基线.py 三份图文件的 sha256（路由只读的判据）；
 │                        #   路由断言.py ask-matt 五条验收项加「只指向表里的三个入口」，八个路由用例各 import 一遍；
-│                        #   活图断言.py 活图在哪、回流前的逐文件 sha256，四个逐节点回流用例各 import 一遍（ADR-0019）
+│                        #   活图断言.py 活图在哪、回流前的逐文件 sha256，四个逐节点回流用例与用例「回流」各 import 一遍，种子「回流」的回放也读它（ADR-0019、ADR-0020）
 └── 领域/<领域名>/领域图.json   # 脚本层用的合成小领域「菜园」（ADR-0015，#26），tests/loo0ng-graph 与 tests/loo0ng-domain 全用它跑；领域/说明.md 一段说明
 ```
 
@@ -138,7 +139,7 @@ ADR-0015「目录名保持 ASCII」只指 `tests/`、`evals/` 两个顶层；其
 
 每次运行：在 `%TEMP%` 下建临时工作区 → 回放种子 → 调 harness（cwd 即工作区）→ 回复正则 → 逐条断言 → 删工作区（超时、超回合、断言抛错都删）。断言报红时给出函数名与 assert 的消息。
 
-每次运行另在 `%TEMP%` 下建一个**活图家**，经环境变量 `LOO0NG_HOME` 交给 harness（ADR-0019）：领域目录的活图本来住 `~/.loo0ng/领域/`，eval 既不该往律师的主目录里拷东西，也不该吃上一次跑剩下的活图（ADR-0015 只生不存）。跑完连它一起删，`--keep` 时连它一起留并打印路径。两侧都吃这个变量（#90 实测 Codex 的 `workspace-write` 沙箱写得动 `%TEMP%` 下的它）。`--materialize` 生出来的工作区不设它，回放自己兜底：多数种子的领域目录本来就钉在包内的出厂种子上（`evals/共用/回放助手.py` 的默认值），那个工作区的指针块指的就是种子；调过 `用活图()` 的那几个（「逐节点回流」「活图多一件」）把活图落进工作区里的 `.活图家/`。两条路手工触发时都碰不到律师真的 `~/.loo0ng/`。
+每次运行另在 `%TEMP%` 下建一个**活图家**，经环境变量 `LOO0NG_HOME` 交给 harness（ADR-0019）：领域目录的活图本来住 `~/.loo0ng/领域/`，eval 既不该往律师的主目录里拷东西，也不该吃上一次跑剩下的活图（ADR-0015 只生不存）。跑完连它一起删，`--keep` 时连它一起留并打印路径。两侧都吃这个变量（#90 实测 Codex 的 `workspace-write` 沙箱写得动 `%TEMP%` 下的它）。`--materialize` 生出来的工作区不设它，回放自己兜底：多数种子的领域目录本来就钉在包内的出厂种子上（`evals/共用/回放助手.py` 的默认值），那个工作区的指针块指的就是种子；调过 `用活图()` 的那几个（「逐节点回流」「活图多一件」「回流」）把活图落进工作区里的 `.活图家/`。**但兜底只管回放自己那几条命令，管不到 harness 里的模型**：模型自己跑 `sketch.py home` 时环境里没有这个变量，解析到的就是真的 `~/.loo0ng/`，一次关票触发就能写进开发者自己那份活图（#105 在 Codex 侧实测到；用例「回流」的提示词不再给路径之后，这条路才走得到）。所以 `--materialize` 回显里带上这次要设的 `LOO0NG_HOME`，关票触发之前把它设进环境；eval 那条路由跑器统一设，碰不到真的主目录。
 
 种子接口（实现随起手票）：`evals/种子/<场景>/` 里除 `回放.py` 与 `状态.md` 之外的条目原样拷进工作区，再在工作区里跑 `python 回放.py <工作区>`；起手（`loo0ng-setup-case`）、引擎 CLI、归档脚本都写在回放里，跑器不另定回放格式。
 
@@ -156,15 +157,18 @@ Windows 上工作区用 `os.mkdir` 而不用 `tempfile.mkdtemp`：后者建的�
 
 ```bash
 # 1. 生一个工作区：打印路径就停，不跑 harness、不删
+#    活图在工作区里的种子（「逐节点回流」「活图多一件」「回流」）还会多回显一行 LOO0NG_HOME=<…>
 python scripts/skill-eval.py --materialize 在办中
 
 # 2. Claude Code 侧（开发会话里就能跑，打的是真名，算真实触发）
 cd <上一步打印的路径>
+export LOO0NG_HOME=<上一步回显的那个>   # 回显了就必须设：不设的话模型自己跑 home 会写真的 ~/.loo0ng
 MSYS_NO_PATHCONV=1 CLAUDECODE= CLAUDE_CODE_ENTRYPOINT= \
   claude -p "/<skill 名> <律师那句话>" --output-format json \
   --permission-mode acceptEdits --no-session-persistence --allowedTools Bash
 
-# 3. Codex 侧：只能人工，在客户端里 cd 到同一个路径再打 $<skill 名>
+# 3. Codex 侧：只能人工，在客户端里 cd 到同一个路径再打 $<skill 名>；
+#    回显了 LOO0NG_HOME 就先在那个终端里设好，客户端继承的是它自己的环境
 
 # 4. 用完删掉那个目录
 ```

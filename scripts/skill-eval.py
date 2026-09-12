@@ -6,6 +6,8 @@
 用法：
   python scripts/skill-eval.py --harness claude [--case 名 ...] [--runs N] [--max-turns N] [--timeout 秒]
   python scripts/skill-eval.py --harness codex  ...
+  可选 --model <模型> 与 --effort <档>：两侧都透传给各自的 CLI，都不给时走 CLI 自己的默认
+  （Codex 读 ~/.codex/config.toml），这是既有跑法的兼容线；这次用的是哪个，跑器回显第一行报出来。
   可选 --evals <用例根>（默认 evals/用例）、--keep（跑完不删工作区，只为排障）。
   python scripts/skill-eval.py --materialize <种子名>
               不跑用例，只生一个回放了这个种子的工作区、打印路径就停，也不删：关票触发在这样的
@@ -52,6 +54,7 @@ DEFAULT_TIMEOUT = 300
 CASE_KEYS = {"种子", "skill", "回复正则", "回合上限", "超时秒", "允许工具", "Codex沙箱", "说明"}
 CODEX_SANDBOXES = ("workspace-write", "danger-full-access")
 LIVE_HOME_ENV = "LOO0NG_HOME"  # 活图的「家」，与 skills/loo0ng-domain/scripts/sketch.py 同一个名字
+WS_LIVE_HOME = ".活图家"        # 没设 LIVE_HOME_ENV 时回放把活图落在工作区里的这个目录（evals/共用/回放助手.py）
 DEFAULT_CODEX_SANDBOX = "workspace-write"
 CASE_REQUIRED = ("种子", "回复正则")
 SEED_META_FILES = ("回放.py", "状态.md")
@@ -119,13 +122,17 @@ def parse_args(argv=None):
     ap.add_argument("--max-turns", type=positive_int, default=None, help="回合上限，覆盖用例里的值")
     ap.add_argument("--timeout", type=positive_int, default=None, help="单次超时秒数，覆盖用例里的值")
     ap.add_argument("--keep", action="store_true", help="跑完不删临时工作区（排障用）")
+    ap.add_argument("--model", default=None, help="模型，透传给 harness；不给则走 CLI 默认")
+    ap.add_argument("--effort", default=None, help="推理档，透传给 harness；不给则走 CLI 默认")
     opts = ap.parse_args(argv)
     if opts.materialize:
         # 只生工作区这一路不跑用例，跑用例才有意义的参数一个都不收（收了也没处使，静默吃掉更糟）。
         多余 = [名 for 名, 值, 默认 in (("--harness", opts.harness, None), ("--case", opts.case, []),
                                       ("--runs", opts.runs, 1), ("--keep", opts.keep, False),
                                       ("--max-turns", opts.max_turns, None),
-                                      ("--timeout", opts.timeout, None)) if 值 != 默认]
+                                      ("--timeout", opts.timeout, None),
+                                      ("--model", opts.model, None),
+                                      ("--effort", opts.effort, None)) if 值 != 默认]
         if 多余:
             ap.error("--materialize 只生工作区、不跑用例，别再给 %s" % "、".join(多余))
     elif not opts.harness:
@@ -308,12 +315,18 @@ def build_prompt(harness: str, case: Case) -> str:
 
 def build_command(harness: str, exe: List[str], prompt: str, workspace: pathlib.Path, *,
                   max_turns: int, last_path: pathlib.Path, allowed_tools: List[str],
-                  codex_sandbox: str = DEFAULT_CODEX_SANDBOX) -> List[str]:
+                  codex_sandbox: str = DEFAULT_CODEX_SANDBOX,
+                  model: Optional[str] = None, effort: Optional[str] = None) -> List[str]:
+    # 模型与档都是可选的：一个都不给时两侧命令与从前逐字相同，走各自 CLI 的默认（Codex 读它的 config.toml）。
     if harness == "claude":
         cmd = [*exe, "-p", prompt, "--output-format", "json", "--max-turns", str(max_turns),
                "--permission-mode", "acceptEdits", "--no-session-persistence"]
         if allowed_tools:
             cmd += ["--allowedTools", *allowed_tools]
+        if model:
+            cmd += ["--model", model]
+        if effort:
+            cmd += ["--effort", effort]
         return cmd
     # 本套用例全部跑在默认的 workspace-write 上：#78 实测把曾经标着 danger-full-access 的 11 个用例
     # 一次全绿，回合数 9 至 18，比原先在全权限下记的还低。沙箱里 python 敲不动（#28、#62 的观察成立，
@@ -323,8 +336,13 @@ def build_command(harness: str, exe: List[str], prompt: str, workspace: pathlib.
     # danger-full-access 留着是跑器的能力，不是任何用例的前提。
     # 提示词走 stdin（PROMPT 位置给 "-"）：PATH 上的 codex 是 npm 的 .cmd 垫片，cmd.exe 把参数里第一个换行之后的
     # 字全吞掉，多行提示词只剩第一行（#28 出一版用例发现）。
-    return [*exe, "exec", "--skip-git-repo-check", "--ephemeral", "-s", codex_sandbox,
-            "-C", str(workspace), "--json", "-o", str(last_path), "-"]
+    cmd = [*exe, "exec", "--skip-git-repo-check", "--ephemeral", "-s", codex_sandbox,
+           "-C", str(workspace), "--json", "-o", str(last_path)]
+    if model:
+        cmd += ["-m", model]
+    if effort:
+        cmd += ["-c", 'model_reasoning_effort="%s"' % effort]
+    return [*cmd, "-"]
 
 
 def kill_tree(proc: subprocess.Popen) -> None:
@@ -347,13 +365,15 @@ def kill_tree(proc: subprocess.Popen) -> None:
         pass
 
 
-def invoke(harness: str, case: Case, workspace: pathlib.Path, prompt: str, max_turns: int, timeout: int) -> Invocation:
+def invoke(harness: str, case: Case, workspace: pathlib.Path, prompt: str, max_turns: int, timeout: int,
+           model: Optional[str] = None, effort: Optional[str] = None) -> Invocation:
     exe = harness_executable(harness)
     out_dir = make_workspace(case.name + "-out")
     try:
         last_path = out_dir / "last.md"
         cmd = build_command(harness, exe, prompt, workspace, max_turns=max_turns,
-                            last_path=last_path, allowed_tools=case.allowed_tools, codex_sandbox=case.codex_sandbox)
+                            last_path=last_path, allowed_tools=case.allowed_tools,
+                            codex_sandbox=case.codex_sandbox, model=model, effort=effort)
         if harness == "claude":
             return _invoke_claude(cmd, workspace, timeout)
         return _invoke_codex(cmd, workspace, max_turns, timeout, last_path, prompt)
@@ -477,7 +497,8 @@ def run_case(case: Case, opts, invoke: Callable = invoke) -> List[RunResult]:
             os.environ[LIVE_HOME_ENV] = str(live_home)
             if case.seed:
                 replay_seed(pathlib.Path(opts.evals), case.seed, workspace)
-            inv = invoke(opts.harness, case, workspace, prompt, max_turns, timeout)
+            inv = invoke(opts.harness, case, workspace, prompt, max_turns, timeout,
+                         model=opts.model, effort=opts.effort)
             failures = evaluate(case, workspace, inv)
         finally:
             if was is None:
@@ -509,6 +530,14 @@ def materialize(opts, out) -> int:
         print("错误：%s" % e, file=sys.stderr)
         return 2
     print(str(workspace), file=out)
+    # 活图落在工作区里的种子：触发之前必须把这个变量设进环境。回放自己兜底只管回放那几条命令，
+    # 管不到 harness 里的模型：它自己跑 sketch.py home 时没有这个变量就解析到真的 ~/.loo0ng，
+    # 一次关票触发就写进了开发者自己那份活图（#105 在 Codex 侧实测到）。
+    家 = workspace / WS_LIVE_HOME
+    if 家.is_dir():
+        print("%s=%s" % (LIVE_HOME_ENV, 家), file=out)
+        print("这个种子的活图在工作区里。触发之前把上面这个变量设进环境，"
+              "否则模型自己跑 sketch.py home 会写到真的 ~/.loo0ng（#105）。", file=out)
     return 0
 
 
@@ -521,6 +550,8 @@ def main(argv=None, invoke: Callable = invoke, out=sys.stdout) -> int:
     except EvalError as e:
         print("错误：%s" % e, file=sys.stderr)
         return 2
+    # 跨跑比较的结果读不出是哪个模型跑的，就没法比：这一行把这次用的模型与档记在输出的头上。
+    print("[%s] 模型 %s，档 %s" % (opts.harness, opts.model or "CLI 默认", opts.effort or "CLI 默认"), file=out)
     results: List[RunResult] = []
     for case in cases:
         try:

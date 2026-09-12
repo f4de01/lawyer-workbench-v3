@@ -72,8 +72,12 @@ def check_视图已重算(workspace, reply):
 
 
 def _is_harness_noise(name):
-    """harness 跑 python 时留下的缓存目录（__pycache__、.uv-cache、.uv-python 等），不算工作区产物。"""
-    return name == "__pycache__" or name.startswith(".")
+    """harness 跑 python 时留下的缓存目录（__pycache__、.uv-cache、.uv-python 等），不算工作区产物。
+
+    #105 实测 Codex 也会把 uv 的缓存落成不带点的 `uv-cache`，所以 `uv-` 开头的一并忽略：
+    它是 harness 自备解释器留下的，不是 skill 的产物。七份同名小函数逐字相同，改一处就一起改。
+    """
+    return name == "__pycache__" or name.startswith(".") or name.startswith("uv-")
 
 
 def check_没写别的文件(workspace, reply):
