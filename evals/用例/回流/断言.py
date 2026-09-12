@@ -6,6 +6,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "共用"))
 import 活图断言 as 助手  # noqa: E402  活图在哪、回流之前长什么样，只从种子写下的那份基线里读
+import 回放助手          # noqa: E402  包内出厂种子的路径只有一处，与种子的回放读同一个常量
 
 模块 = "接管与调查"
 已确认 = "乙公司甲年乙月丙日厂区接管现场情况说明"
@@ -18,7 +19,7 @@ def _domain(workspace):
 
 
 def _case(workspace):
-    return json.loads((pathlib.Path(workspace) / "案件" / "图.json").read_text(encoding="utf-8"))
+    return json.loads((workspace / "案件" / "图.json").read_text(encoding="utf-8"))
 
 
 def _基线(workspace):
@@ -66,12 +67,18 @@ def check_活图恰好多出那一个节点(workspace, reply):
 
 
 def check_包内出厂种子一个字节没动(workspace, reply):
-    """写的得是活图那一份（ADR-0020）。活图是种子的逐字副本，所以拿基线里那条指纹直接比种子。"""
-    种子 = (pathlib.Path(__file__).resolve().parents[3] / "skills" / "loo0ng-domain"
-            / "assets" / "破产" / "领域图.json")
-    当初 = _基线(workspace)["指纹"]["领域图.json"]
-    assert hashlib.sha256(种子.read_bytes()).hexdigest() == 当初, (
-        "包内出厂种子被写了：回流只写活图，一次 eval 也不该动到 skills/ 下的东西（ADR-0015、ADR-0020）")
+    """写的得是活图那一份（ADR-0020）：整个领域目录 22 件逐文件比，不是只比 领域图.json。
+
+    期望值取基线里那份指纹：活图是 `home` 从种子整份拷出来的逐字副本，两边的相对路径与 sha256
+    本来就该一模一样。「逐字副本」这个前提由 tests/loo0ng-domain/test_seeds.py 的
+    test_活图是包内出厂种子的一份拷贝 钉着，home 哪天改成带改写的拷贝，那条先红。
+    """
+    现在, 当初 = 助手.指纹(回放助手.出厂种子), _基线(workspace)["指纹"]
+    变了 = ["%s 没了" % k for k in 当初 if k not in 现在]
+    变了 += ["%s 多出来" % k for k in 现在 if k not in 当初]
+    变了 += ["%s 的字节变了" % k for k in 当初 if k in 现在 and 现在[k] != 当初[k]]
+    assert not 变了, ("包内出厂种子被动了：回流只写活图，一次 eval 也不该动到 skills/ 下的东西"
+                      "（ADR-0015、ADR-0020）：%s" % "、".join(变了))
 
 
 def check_新节点排在那个模块的末尾(workspace, reply):
@@ -102,7 +109,7 @@ def check_活图仍是一张合法的领域图(workspace, reply):
 
 
 def check_案件图字节不变(workspace, reply):
-    digest = hashlib.sha256((pathlib.Path(workspace) / "案件" / "图.json").read_bytes()).hexdigest()
+    digest = hashlib.sha256((workspace / "案件" / "图.json").read_bytes()).hexdigest()
     assert digest == _基线(workspace)["案件图sha256"], \
         "回流只读案件图，案件图不该有任何改动（ADR-0012）"
 
@@ -110,13 +117,13 @@ def check_案件图字节不变(workspace, reply):
 def _is_harness_noise(name):
     """harness 跑 python 时留下的缓存目录（__pycache__、.uv-cache、.uv-python 等），不算工作区产物。
 
-    #105 实测 Codex 这一次把 uv 的缓存落成了不带点的 `uv-cache`，所以 `uv-` 开头的一并忽略：
-    它是 harness 自备解释器留下的，不是 skill 的产物，本条只管雏形文件有没有落进工作区。
+    #105 实测 Codex 也会把 uv 的缓存落成不带点的 `uv-cache`，所以 `uv-` 开头的一并忽略：
+    它是 harness 自备解释器留下的，不是 skill 的产物。七份同名小函数逐字相同，改一处就一起改。
     """
     return name == "__pycache__" or name.startswith(".") or name.startswith("uv-")
 
 
 def check_雏形文件没落进工作区(workspace, reply):
-    names = sorted(p.name for p in pathlib.Path(workspace).iterdir() if not _is_harness_noise(p.name))
+    names = sorted(p.name for p in workspace.iterdir() if not _is_harness_noise(p.name))
     assert names == ["案件"], \
         "工作区里多出了文件（活图在工作区外，雏形文件该写在临时目录）：%s" % names

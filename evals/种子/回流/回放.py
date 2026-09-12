@@ -9,7 +9,8 @@
     <工作区>/.活图基线.json   回流之前的样子：案件图的 sha256、活图路径、逐文件 sha256、模块数与节点数
 
 活图家取环境变量 LOO0NG_HOME：跑器每次运行建一个临时的交给两侧 harness（ADR-0015 只生不存）。
-没设这个变量时（--materialize、脚本层单测）落在工作区里的 .活图家/ 下，永远不碰开发者真的 ~/.loo0ng。
+没设这个变量时（--materialize、脚本层单测）落在工作区里的 .活图家/ 下，永远不碰开发者真的 ~/.loo0ng；
+取路径这一步用 evals/共用/回放助手.py 的 用活图()，与七个路由种子同一份写法。
 活图而不是工作区里摆一份副本：真实那条路的第 1 步就是跑 home 取路径（`references/回流.md`），
 提示词里不给路径，这一步得由模型自己走（#105）。
 
@@ -21,23 +22,21 @@
 import hashlib
 import importlib.util
 import json
-import os
 import pathlib
 import subprocess
 import sys
 
 REPO = pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "evals" / "共用"))
-import 活图断言 as 助手  # noqa: E402  「指纹」与基线文件名只有一份，用例的断言与本回放读同一处
+import 活图断言 as 助手      # noqa: E402  「指纹」与基线文件名只有一份，用例的断言与本回放读同一处
+import 回放助手              # noqa: E402  取活图路径这一步与七个路由种子共用一份写法
 
 ENGINE = REPO / "skills" / "loo0ng-graph" / "scripts" / "graph.py"
-SKETCH = REPO / "skills" / "loo0ng-domain" / "scripts" / "sketch.py"
-DOMAIN_DIR = REPO / "skills" / "loo0ng-domain" / "assets" / "破产"
+DOMAIN_DIR = 回放助手.出厂种子  # 包内 assets/破产/：活图由 home 从它拷出，案件那一层的 --domain 也指它
 RUNNER = REPO / "scripts" / "skill-eval.py"
 EVALS = REPO / "evals" / "用例"
-LIVE_HOME_ENV = "LOO0NG_HOME"   # 活图的「家」，与 sketch.py、跑器同一个名字
 领域名 = "破产"
-基线名 = 助手.基线名             # 点开头：用例的「没往工作区乱写」断言按惯例忽略它
+基线名 = 助手.基线名           # 点开头：用例的「没往工作区乱写」断言按惯例忽略它
 
 
 def load_runner():
@@ -70,27 +69,17 @@ DOCS = {
 }
 
 
-def run(cmd, cwd):
+def run(cmd, cwd) -> int:
     r = subprocess.run([sys.executable, *[str(c) for c in cmd]], cwd=str(cwd),
                        capture_output=True, text=True, encoding="utf-8", errors="replace")
     if r.returncode != 0:
         sys.stderr.write((r.stderr or r.stdout).strip() + "\n")
-        raise SystemExit(r.returncode)
-    return r.stdout
-
-
-def 活图(ws: pathlib.Path) -> pathlib.Path:
-    """跑 sketch.py home 取活图路径：没有就从包内 assets/破产/ 整份拷一份，回显第一行是绝对路径。"""
-    if not os.environ.get(LIVE_HOME_ENV, "").strip():
-        os.environ[LIVE_HOME_ENV] = str(ws / ".活图家")
-    out = run([SKETCH, "home", "--name", 领域名], ws)
-    第一行 = out.splitlines()[0]
-    return pathlib.Path(第一行.split("：", 1)[1].strip())
+    return r.returncode
 
 
 def main(workspace: str) -> int:
     ws = pathlib.Path(workspace)
-    live = 活图(ws)
+    live = 回放助手.用活图(ws, 领域名)   # 没设 LOO0NG_HOME 时它自己落进工作区里的 .活图家/
     case = ws / "案件"
     case.mkdir(parents=True, exist_ok=True)
     load_runner().replay_seed(EVALS, "在办中", case)
@@ -115,7 +104,9 @@ def main(workspace: str) -> int:
          "--review", "文书/%s/%s-v1-审查报告.md" % (已生成, 已生成)],
     ]
     for cmd in steps:
-        run(cmd, case)
+        code = run(cmd, case)
+        if code != 0:
+            return code
 
     # 基线让断言不必硬写活图路径与「72 个节点」：下一次入库让出厂种子长大，这份种子跟着长，用例不动。
     domain = json.loads((live / "领域图.json").read_text(encoding="utf-8"))
