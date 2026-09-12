@@ -1,24 +1,27 @@
 #!/usr/bin/env python3
 """起手 CLI：在当前目录建案件工作区的六格、起手图三选一、拷官方模板原件、写工作区指针块。
 
-标准库零依赖，不 import 图引擎：图的每一次写入都经 skill "loo0ng-graph" 的 scripts/graph.py 子进程，
-它仍是 图.json 的唯一写入口。本脚本不含任何领域语义，六格与指针块的形状见 ../references/。
+标准库零依赖，不 import 兄弟 skill：图的每一次写入都经 skill "loo0ng-graph" 的 scripts/graph.py 子进程，
+它仍是 图.json 的唯一写入口；--domain-name 的活图目录经 skill "loo0ng-domain" 的 scripts/sketch.py home
+子进程取，活图仍归它管。本脚本不含任何领域语义，六格与指针块的形状见 ../references/。
 
 用法：
   python setup.py init --empty | --full | --from <定制图>
-                       [--domain <活图目录或其中的领域图.json>] [--name <领域名>]
-                       [--workspace <目录>] [--engine <graph.py>]
+                       [--domain-name <领域名> | --domain <领域目录或其中的领域图.json>]
+                       [--name <领域名>] [--workspace <目录>] [--engine <graph.py>] [--sketch <sketch.py>]
   python setup.py register --node <节点标题> --doc <工作区内相对路径> --words "<律师那句话>"
                        [--domain <领域目录或领域图.json>] [--workspace <目录>] [--engine <graph.py>]
 
-init 的前置是工作区里没有 图.json，有就拒绝：起手一案一次（ADR-0007）。顺序是先落图再建格：
-引擎拒了就一格不建、一个字不写。归档、雏形、起手清单不在这里，它们是别的 skill 与模型的事。
+init 的前置是工作区里没有 图.json，有就拒绝：起手一案一次（ADR-0007）。领域目录两种传法二选一：
+律师侧给 --domain-name <领域名>（路径本脚本自己取，只打这一条命令），开发侧给 --domain <路径>
+（种子回放、开发者定制的领域目录）。顺序是先取活图、再落图、再建格：取不到活图或引擎拒了，
+都是一格不建、一个字不写。归档、雏形、起手清单不在这里，它们是别的 skill 与模型的事。
 
 register 是起手清单里「既有成品登记为已生成、来源律师」那一条的机械落地：按固定模板写一份
 审查报告（每一版文书必有一份，CONTEXT.md「审查报告」），再经引擎追加一条来源为律师的生成条目。
 它只登记不确认：确认永不自动（ADR-0002）。
 
-退出码：0 完成；1 拒绝（图已存在、三选一没选一个、引擎拒写、找不到文件、路径越界）；2 用法错误。
+退出码：0 完成；1 拒绝（图已存在、三选一没选一个、取不到活图、引擎拒写、找不到文件、路径越界）；2 用法错误。
 """
 import argparse
 import datetime as _dt
@@ -38,6 +41,8 @@ SEED_ASSETS_DIRNAME = "assets"        # skill 包内的出厂种子（ADR-0019�
 SEED_SKILL_DIRNAME = "loo0ng-domain"
 SEED_ROOT_RELATIVE = pathlib.Path("..") / ".." / SEED_SKILL_DIRNAME / SEED_ASSETS_DIRNAME
 ENGINE_RELATIVE = pathlib.Path("..") / ".." / "loo0ng-graph" / "scripts" / "graph.py"
+SKETCH_RELATIVE = pathlib.Path("..") / ".." / SEED_SKILL_DIRNAME / "scripts" / "sketch.py"
+LIVE_PREFIX = "活图："   # sketch.py home 回显的第一行，路径跟在它后面
 REFERENCES = pathlib.Path(__file__).resolve().parent.parent / "references"
 AGENTS_TEMPLATE = REFERENCES / "工作区AGENTS.md"
 REVIEW_TEMPLATE = REFERENCES / "既有成品审查报告.md"
@@ -68,6 +73,37 @@ def resolve_engine(given: Optional[str]) -> pathlib.Path:
     return engine
 
 
+def default_sketch() -> pathlib.Path:
+    return (pathlib.Path(__file__).resolve().parent / SKETCH_RELATIVE).resolve()
+
+
+def resolve_sketch(given: Optional[str]) -> pathlib.Path:
+    sketch = pathlib.Path(given).resolve() if given else default_sketch()
+    if not sketch.is_file():
+        raise Rejected("找不到 %s；用 --sketch 指向 skill \"loo0ng-domain\" 的 scripts/sketch.py，"
+                       "或改用 --domain <领域目录> 直接给路径" % sketch)
+    return sketch
+
+
+def live_domain_dir(sketch: pathlib.Path, name: str) -> Tuple[pathlib.Path, List[str]]:
+    """--domain-name 走这条：子进程调 skill "loo0ng-domain" 的 sketch.py home 取活图目录（ADR-0019）。
+
+    与图引擎同一个形状：活图归 skill "loo0ng-domain" 管，本脚本只是调用者，不自己算活图在哪、
+    也不自己拷种子。它发生在建格与落图之前：home 拒了这里跟着拒，一格不建、一个字不写。
+    home 的回显原样带回去，首次起手拷了几件是律师该看见的。
+    """
+    r = subprocess.run([sys.executable, str(sketch), "home", "--name", name], capture_output=True,
+                       text=True, encoding="utf-8", errors="replace")
+    lines = [line for line in (r.stdout or "").splitlines() if line.strip()]
+    if r.returncode != 0:
+        raise Rejected("取不到领域「%s」的活图目录，工作区一格没建、一个字没写：%s"
+                       % (name, (r.stderr or r.stdout).strip()))
+    if not lines or not lines[0].startswith(LIVE_PREFIX):
+        raise Rejected("sketch.py home 的回显第一行该是「%s<绝对路径>」，收到 %r"
+                       % (LIVE_PREFIX, lines[0] if lines else ""))
+    return pathlib.Path(lines[0][len(LIVE_PREFIX):].strip()).resolve(), lines
+
+
 def resolve_domain_dir(given: Optional[str]) -> Optional[pathlib.Path]:
     """--domain 收领域目录或其中的 领域图.json，指针块里记的一律是目录。"""
     if not given:
@@ -96,8 +132,8 @@ def seed_path_note(domain_dir: Optional[pathlib.Path]) -> List[str]:
     if domain_dir is None or not looks_like_seed(domain_dir):
         return []
     return ["注意：--domain 给的是 skill 包内的出厂种子，不是活图（ADR-0019）：包一升级它就被换掉，"
-            "律师累计的东西不在这里。律师起手要先取活图目录，调用 skill \"loo0ng-domain\" 的 "
-            "sketch.py home --name <领域名>，再把它回显的路径给 --domain。"]
+            "律师累计的东西不在这里。律师起手改用 --domain-name <领域名>，活图路径由本脚本自己经 "
+            "skill \"loo0ng-domain\" 的 sketch.py home 取。"]
 
 
 def engine_base(graph_path: pathlib.Path, domain_dir: Optional[pathlib.Path]) -> List[str]:
@@ -191,10 +227,20 @@ def cmd_init(args) -> int:
     if chosen != 1:
         raise Rejected("起手图三选一，恰好给一个：--empty（空图）、--full（整份领域图）、"
                        "--from <定制图路径>（开发者交付的定制图）")
-    if args.full and not args.domain:
-        raise Rejected("--full 要带 --domain 指向领域目录或其中的 %s" % DOMAIN_GRAPH_FILENAME)
+    if args.domain and args.domain_name:
+        raise Rejected("--domain-name 与 --domain 二选一：律师侧给 --domain-name <领域名>，活图路径由本脚本"
+                       "自己取；开发侧给 --domain <路径>（种子回放、开发者定制图）。")
+    if args.domain_name and args.name:
+        raise Rejected("--domain-name 已经给了领域名，不要再给 --name：两个给成不一样的，指针块的「领域」"
+                       "与「领域目录」会各指一处。要另起一个领域名就改用 --domain <路径> 加 --name。")
+    if args.full and not (args.domain or args.domain_name):
+        raise Rejected("--full 要带 --domain-name <领域名>，或带 --domain 指向领域目录或其中的 %s"
+                       % DOMAIN_GRAPH_FILENAME)
     engine = resolve_engine(args.engine)
-    domain_dir = resolve_domain_dir(args.domain)
+    if args.domain_name:
+        domain_dir, home_notes = live_domain_dir(resolve_sketch(args.sketch), args.domain_name)
+    else:
+        domain_dir, home_notes = resolve_domain_dir(args.domain), []
 
     ws.mkdir(parents=True, exist_ok=True)
     base = engine_base(graph_path, domain_dir)
@@ -211,7 +257,7 @@ def cmd_init(args) -> int:
     if code != 0:
         raise Rejected("图引擎没起手，工作区一格没建：%s" % (err or out))
 
-    notes = [out] if out else []
+    notes = home_notes + ([out] if out else [])
     make_cells(ws)
     notes.append("六格已建：%s" % "、".join(CELLS))
     data = read_graph(graph_path)
@@ -295,14 +341,20 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--engine", default=None,
                         help="图引擎 graph.py 的路径，默认取兄弟 skill loo0ng-graph 里的")
     common.add_argument("--domain", default=None,
-                        help="活图目录或其中的 %s；活图路径由 skill \"loo0ng-domain\" 的 "
-                             "sketch.py home 取，别给包内 assets/ 下的出厂种子" % DOMAIN_GRAPH_FILENAME)
+                        help="领域目录或其中的 %s；开发侧那一条（种子回放、开发者定制图）。"
+                             "律师侧用 --domain-name，别给包内 assets/ 下的出厂种子" % DOMAIN_GRAPH_FILENAME)
 
     p = sub.add_parser("init", parents=[common], help="建六格、起手图三选一、拷官方模板、写指针块")
     p.add_argument("--empty", action="store_true", help="空图起手")
     p.add_argument("--full", action="store_true", help="整份领域图起手（人的选择，不受惰性约束）")
     p.add_argument("--from", dest="from_path", default=None, help="开发者交付的定制图")
-    p.add_argument("--name", default=None, help="领域名；空图起手又没有 --domain 时必填")
+    p.add_argument("--domain-name", dest="domain_name", default=None,
+                   help="领域名；活图目录由本脚本经 skill \"loo0ng-domain\" 的 sketch.py home 自己取。"
+                        "律师侧用这一个，与 --domain 二选一")
+    p.add_argument("--sketch", default=None,
+                   help="sketch.py 的路径，默认取兄弟 skill loo0ng-domain 里的")
+    p.add_argument("--name", default=None,
+                   help="领域名；空图起手又没有 --domain / --domain-name 时必填。与 --domain-name 不并存")
 
     p = sub.add_parser("register", parents=[common], help="把既有成品登记为已生成、来源律师")
     p.add_argument("--node", required=True, help="节点标题")

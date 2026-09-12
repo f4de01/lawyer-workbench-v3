@@ -10,7 +10,7 @@ skills/<name>/
 ├── agents/openai.yaml    # Codex 侧外观：interface.display_name（= name）、interface.short_description（中文进这里）；编排 skill 与路由另加 policy.allow_implicit_invocation: false
 ├── references/           # 正文按需指向的长材料
 ├── requirements.txt      # 只有 loo0ng-to-docx 有：转换器后端的精确钉（python-docx==1.2.0，ADR-0018）。随包到律师机，agent 自备环境时按它装；仓库根上放到不了那里
-├── scripts/              # 标准库零依赖的 CLI；只有 loo0ng-to-docx 的转换器例外（python-docx，ADR-0006），它的门禁本体也零依赖、PyMuPDF 只是可选的渲染加信（ADR-0017）。互不 import；要写图的（loo0ng-domain 的雏形、loo0ng-setup-case 的起手与既有成品登记）以子进程调 loo0ng-graph 的引擎，默认按兄弟目录找
+├── scripts/              # 标准库零依赖的 CLI；只有 loo0ng-to-docx 的转换器例外（python-docx，ADR-0006），它的门禁本体也零依赖、PyMuPDF 只是可选的渲染加信（ADR-0017）。互不 import；跨 skill 一律以子进程互调、默认按兄弟目录找：要写图的（loo0ng-domain 的雏形、loo0ng-setup-case 的起手与既有成品登记）调 loo0ng-graph 的引擎，起手取活图路径（loo0ng-setup-case 的 init --domain-name）调 loo0ng-domain 的 sketch.py home（#97）
 └── assets/               # 只有 loo0ng-domain 有：assets/<领域>/ 下领域图、模板/ 官方模板原件、指引手册/ 指引手册原文（ADR-0004）。这份是出厂种子，随包升级被换掉；律师那台机上的活图在 ~/.loo0ng/领域/<领域>/，由 sketch.py home 首次起手时拷出（ADR-0019）
 ```
 
