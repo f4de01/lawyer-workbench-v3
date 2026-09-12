@@ -44,16 +44,16 @@ jobs:
       # 产物落在仓库外：结算之后那次 git add -A 不能把 zip 一起提交了
       OUT: /tmp/release-out
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
@@ -101,7 +101,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: 产物留一份（干跑时读的就是它）
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-v${{ steps.after.outputs.version }}
           path: |
