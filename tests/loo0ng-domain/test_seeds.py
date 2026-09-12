@@ -4,7 +4,7 @@
 
 - 种子「回流」是开发侧那条路的摊子（ADR-0012）：「在办中」那一层的状态由
   tests/loo0ng-setup-case/test_seeds.py 覆盖，这里只看回流这一层加了什么：两个律师自加节点的状态、
-  可写的领域图副本、案件图指纹，以及 from-case 恰好提出已确认的那一个。
+  由 sketch.py home 拷出的那份活图、案件图指纹，以及 from-case 恰好提出已确认的那一个。
 - 种子「逐节点回流」是律师侧那条路的摊子（ADR-0019）：一个合成小领域「菜园」上的案件工作区加一份活图，
   两个已生成未确认的节点一个领域图里有、一个没有，缺失判定（图视图里的「来源」）该分得开。
 
@@ -44,12 +44,26 @@ import 活图断言 as 助手  # noqa: E402  节点名与「指纹」只有一�
 class 回流种子(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.home = pathlib.Path(tempfile.mkdtemp(prefix="live-home-"))
+        cls.was = os.environ.get("LOO0NG_HOME")
+        os.environ["LOO0NG_HOME"] = str(cls.home)      # 绝不碰真的 ~/.loo0ng（ADR-0015 只生不存）
         cls.ws = pathlib.Path(tempfile.mkdtemp(prefix="seed-test-"))
         runner.replay_seed(EVALS, "回流", cls.ws)
 
     @classmethod
     def tearDownClass(cls):
+        if cls.was is None:
+            os.environ.pop("LOO0NG_HOME", None)
+        else:
+            os.environ["LOO0NG_HOME"] = cls.was
         runner.remove_workspace(cls.ws)  # 只读的律师陈述与被占用的文件都归它处理
+        runner.remove_workspace(cls.home)
+
+    def 基线(self):
+        return json.loads((self.ws / 助手.基线名).read_text(encoding="utf-8"))
+
+    def 活图(self):
+        return pathlib.Path(self.基线()["活图"])
 
     def graph(self):
         return json.loads((self.ws / "案件" / "图.json").read_text(encoding="utf-8"))
@@ -61,10 +75,14 @@ class 回流种子(unittest.TestCase):
                     return m, n
         raise AssertionError("案件图里找不到节点「%s」" % title)
 
-    def test_工作区根只有那三样(self):
-        self.assertEqual(["基线.json", "案件", "领域图.json"],
-                         sorted(p.name for p in self.ws.iterdir()),
-                         "开发会话看得见的三样：案件工作区、可写的领域图副本、回流前的基线")
+    def test_工作区根只有案件与基线(self):
+        self.assertEqual([助手.基线名, "案件"], sorted(p.name for p in self.ws.iterdir()),
+                         "开发会话看得见的两样：案件工作区与回流前的基线；活图在工作区之外（ADR-0020）")
+
+    def test_活图落在临时的活图家里而不是用户主目录(self):
+        self.assertTrue(str(self.活图()).startswith(str(self.home)),
+                        "活图该落在 LOO0NG_HOME 指的临时家里，实际 %s" % self.活图())
+        self.assertEqual("破产", self.活图().name)
 
     def test_两个律师自加节点挂在领域图已有的模块下(self):
         for title in (已确认, 已生成):
@@ -81,24 +99,24 @@ class 回流种子(unittest.TestCase):
             self.assertIn("乙公司", title, "标题要带案件事实，去案件化才有得改")
         self.assertIn("甲年乙月丙日", 已确认)
 
-    def test_领域图副本是原件的一份拷贝(self):
-        self.assertEqual(DOMAIN_GRAPH.read_bytes(), (self.ws / "领域图.json").read_bytes(),
-                         "回流写的是副本，一次 eval 不该动到 skills/ 下的领域图（ADR-0015）")
+    def test_活图是包内出厂种子的一份拷贝(self):
+        self.assertEqual(DOMAIN_GRAPH.read_bytes(), (self.活图() / "领域图.json").read_bytes(),
+                         "活图该是 skills/loo0ng-domain/assets/破产/ 那份出厂种子的逐字副本")
 
     def test_基线记下了回流前的样子(self):
-        基线 = json.loads((self.ws / "基线.json").read_text(encoding="utf-8"))
-        for name, path in (("案件图sha256", self.ws / "案件" / "图.json"),
-                           ("领域图sha256", self.ws / "领域图.json")):
-            self.assertEqual(基线[name], hashlib.sha256(path.read_bytes()).hexdigest(), name)
-        domain = json.loads((self.ws / "领域图.json").read_text(encoding="utf-8"))
-        self.assertEqual(基线["领域图模块数"], len(domain["模块"]))
-        self.assertEqual(基线["领域图节点数"], sum(len(m["节点"]) for m in domain["模块"]),
-                         "断言按这个数判「只多出一个节点」，不硬写 72（下一次回流会改它）")
+        基线 = self.基线()
+        self.assertEqual(基线["案件图sha256"],
+                         hashlib.sha256((self.ws / "案件" / "图.json").read_bytes()).hexdigest())
+        self.assertEqual(助手.指纹(self.活图()), 基线["指纹"], "断言按这份指纹复核包内种子没被写")
+        domain = json.loads((self.活图() / "领域图.json").read_text(encoding="utf-8"))
+        self.assertEqual(基线["模块数"], len(domain["模块"]))
+        self.assertEqual(基线["节点数"], sum(len(m["节点"]) for m in domain["模块"]),
+                         "断言按这个数判「只多出一个节点」，不硬写 72（下一次入库会改它）")
 
     def test_from_case恰好提出已确认的那一个(self):
         r = subprocess.run([sys.executable, str(SKETCH), "from-case",
                             "--case", str(self.ws / "案件" / "图.json"),
-                            "--domain", str(self.ws / "领域图.json")],
+                            "--domain", str(self.活图())],
                            capture_output=True, text=True, encoding="utf-8", errors="replace")
         self.assertEqual(0, r.returncode, r.stderr)
         proposal = json.loads(r.stdout[r.stdout.index("{"):])

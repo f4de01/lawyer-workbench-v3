@@ -224,6 +224,28 @@ class PromptAndCommandTest(unittest.TestCase):
                                           last_path=self.root / "last.md", allowed_tools=[], codex_sandbox="danger-full-access")
         self.assertNotIn("danger-full-access", claude, "Claude Code 侧不受这个键影响")
 
+    def test_model_and_effort_are_passed_through(self):
+        """两侧各自的写法：Claude Code 侧 --model/--effort，Codex 侧 -m 加一条 -c 配置覆盖（#105 附带）。"""
+        claude = skill_eval.build_command("claude", ["claude.exe"], "提示", self.root / "ws", max_turns=7,
+                                          last_path=self.root / "last.md", allowed_tools=[],
+                                          model="opus", effort="high")
+        self.assertEqual(claude[claude.index("--model") + 1], "opus")
+        self.assertEqual(claude[claude.index("--effort") + 1], "high")
+        codex = skill_eval.build_command("codex", ["codex.cmd"], "提示", self.root / "ws", max_turns=7,
+                                         last_path=self.root / "last.md", allowed_tools=[],
+                                         model="gpt-5", effort="high")
+        self.assertEqual(codex[codex.index("-m") + 1], "gpt-5")
+        self.assertEqual(codex[codex.index("-c") + 1], 'model_reasoning_effort="high"')
+        self.assertEqual(codex[-1], "-", "提示词仍走 stdin，PROMPT 位置还是 -")
+
+    def test_no_model_no_flags(self):
+        """两个参数都不给时命令与从前逐字相同：走各自 CLI 的默认，这是既有跑法的兼容线。"""
+        for harness, exe in (("claude", ["claude.exe"]), ("codex", ["codex.cmd"])):
+            cmd = skill_eval.build_command(harness, exe, "提示", self.root / "ws", max_turns=7,
+                                           last_path=self.root / "last.md", allowed_tools=[])
+            for flag in ("--model", "--effort", "-m", "-c"):
+                self.assertNotIn(flag, cmd, "%s 侧不该凭空多出 %s：%s" % (harness, flag, cmd))
+
     def test_env_strips_nested_claude_and_disables_msys_pathconv(self):
         env = skill_eval.harness_env({"CLAUDECODE": "1", "CLAUDE_CODE_ENTRYPOINT": "cli", "PATH": "x"})
         self.assertNotIn("CLAUDECODE", env)
@@ -233,7 +255,7 @@ class PromptAndCommandTest(unittest.TestCase):
 
 
 def fake_invoke(status="ok", reply="已写入冒烟.txt。", turns=2, files=None, seen=None):
-    def invoke(harness, case, workspace, prompt, max_turns, timeout):
+    def invoke(harness, case, workspace, prompt, max_turns, timeout, model=None, effort=None):
         if seen is not None:
             seen.append((workspace, prompt, max_turns, timeout, sorted(p.name for p in workspace.iterdir())))
         for rel, text in (files or {}).items():
@@ -306,7 +328,7 @@ class RunCaseLifecycleTest(unittest.TestCase):
         case = skill_eval.load_case(make_case(self.root, "炸"))
         seen = []
 
-        def boom(harness, case, workspace, prompt, max_turns, timeout):
+        def boom(harness, case, workspace, prompt, max_turns, timeout, model=None, effort=None):
             seen.append(workspace)
             raise RuntimeError("harness 炸了")
 
@@ -336,7 +358,7 @@ class RunCaseLifecycleTest(unittest.TestCase):
         case = skill_eval.load_case(make_case(self.root, "活图家"))
         家 = []
 
-        def 记下(harness, c, workspace, prompt, max_turns, timeout):
+        def 记下(harness, c, workspace, prompt, max_turns, timeout, model=None, effort=None):
             家.append(os.environ.get(skill_eval.LIVE_HOME_ENV))
             return skill_eval.Invocation(status="ok", reply="", turns=1, detail="")
 
@@ -530,6 +552,7 @@ class MainTest(unittest.TestCase):
                              invoke=fake_invoke(files={"冒烟.txt": "冒烟通过"}), out=out)
         self.assertEqual(rc, 0, out.getvalue())
         self.assertIn("PASS", out.getvalue())
+        self.assertIn("模型 CLI 默认", out.getvalue(), "跨跑比较要读得出这次是哪个模型跑的")
         rc = skill_eval.main(["--harness", "claude", "--evals", str(self.root)],
                              invoke=fake_invoke(files={"冒烟.txt": "错"}), out=out)
         self.assertEqual(rc, 1)
