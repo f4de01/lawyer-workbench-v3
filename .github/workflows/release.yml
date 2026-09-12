@@ -65,8 +65,24 @@ jobs:
 
       - run: npm ci
 
+      # 干跑那次多带一个 --allow-no-changeset：刚发完版 .changeset 空着的时候，改发布脚本的
+      # PR 不该红在「没什么可发的」这个与它无关的理由上；真发版那次照旧硬拦。
       - name: 结算前闸门
-        run: python scripts/release.py preflight
+        run: python scripts/release.py preflight ${{ env.DRY_RUN == 'true' && '--allow-no-changeset' || '' }}
+
+      - name: 干跑时手头没有 changeset 就临时造一份（只活在 runner 上）
+        if: env.DRY_RUN == 'true'
+        run: |
+          if [ "$(python scripts/release.py pending)" = "0" ]; then
+            {
+              echo '---'
+              echo '"loo0ng-skills": patch'
+              echo '---'
+              echo
+              echo '干跑自检用的临时 changeset，不入库。'
+            } > .changeset/干跑自检.md
+            echo "手头没有待结算的 changeset，临时造了一份，好让结算那一步照样走一遍"
+          fi
 
       - name: 记下结算前的版本
         id: before
@@ -90,6 +106,7 @@ jobs:
 
       - name: 把结算出来的那一节摆进 job summary
         run: |
+          cp CHANGELOG.md "$OUT/CHANGELOG.md"
           {
             echo "## v${{ steps.after.outputs.version }}（干跑：$DRY_RUN）"
             echo
@@ -104,9 +121,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: release-v${{ steps.after.outputs.version }}
-          path: |
-            ${{ env.OUT }}
-            CHANGELOG.md
+          path: ${{ env.OUT }}
 
       - name: 干跑到此为止
         if: env.DRY_RUN == 'true'
@@ -120,7 +135,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "发一版 $V：changeset 结算进 CHANGELOG，三处版本对齐（.github/workflows/release.yml）"
+          git commit -m "发一版 $V：changeset 结算进 CHANGELOG，三处版本对齐（release workflow run ${{ github.run_id }}）"
           git tag -a "v$V" -m "v$V"
           git push origin "HEAD:main"
           git push origin "v$V"
@@ -132,4 +147,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "v$V" --title "v$V" --notes-file "$OUT/发布说明.md" \
-            "$OUT/skills-offline-v$V.zip#离线兜底包（七件 skill，LF、无 BOM）"
+            "$OUT/skills-offline-v$V.zip#离线兜底包（登记清单上的全部 skill，LF、无 BOM）"

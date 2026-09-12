@@ -3,6 +3,9 @@
 
 `docs/交付/现场清单.md` 段 0 P2 本来是一段手打的 bash（拷目录、剔 __pycache__、
 perl 转 LF、od 验 BOM）；发布 workflow 也要拿同一个包当 Release 附件，所以收进脚本。
+`docs/实测/打包.py` 有一段同样的 LF 转换，但那一个打的是 2026-09 那次 mac 实测的整包
+（AGENTS.md、applescript、wheel 清单，skills 只是其中一格），是那次实测的历史产物；
+两者没有合并，本脚本只管七件 skill 这一件事。
 名单取自 `.claude-plugin/plugin.json` 的 skills 数组（登记清单只此一份，AGENTS.md
 结构不变量 1），不在这里另抄一遍；哪天增删 skill，包跟着变。
 
@@ -24,7 +27,7 @@ import zipfile
 
 # 要转成 LF 的文本后缀；这之外（docx、png…）一概按二进制原样拷。
 # .ps1 不在其列也不验 BOM：PowerShell 5.1 的脚本必须带 BOM（#18），skills/ 下目前也没有。
-文本后缀 = {".md", ".py", ".sh", ".yaml", ".yml", ".json", ".txt", ".applescript", ".gitattributes"}
+文本后缀 = {".md", ".py", ".sh", ".yaml", ".yml", ".json", ".txt"}
 排除目录 = {"__pycache__", ".git"}
 排除文件 = {".DS_Store"}
 排除后缀 = {".pyc", ".pyo"}
@@ -45,6 +48,7 @@ def 登记的名单(根):
 
 
 def 是文本(f):
+    # .gitattributes 没有后缀，单认文件名
     return f.suffix.lower() in 文本后缀 or f.name == ".gitattributes"
 
 
@@ -131,16 +135,24 @@ def main(argv=None):
         return 1
 
     目录 = pathlib.Path(args.目录) if args.目录 else None
-    if 目录 is not None and 目录.exists() and any(目录.iterdir()):
-        print(str(目录) + " 非空，先删掉或换一个", file=sys.stderr)
+    if 目录 is not None and 目录.exists():
+        if not 目录.is_dir():
+            print(str(目录) + " 不是目录，先删掉或换一个", file=sys.stderr)
+            return 1
+        if any(目录.iterdir()):
+            print(str(目录) + " 非空，先删掉或换一个", file=sys.stderr)
+            return 1
+    z = pathlib.Path(args.zip路径) if args.zip路径 else None
+    if z is not None and z.exists():
+        # 与 --dir 一条口径：两个出口都不覆盖已有的东西
+        print(str(z) + " 已经在了，先删掉或换一个", file=sys.stderr)
         return 1
 
     if 目录 is not None:
         目录.mkdir(parents=True, exist_ok=True)
         写目录(目录, 内容)
         print("打好 " + str(目录) + "：" + str(len(名单)) + " 件 skill，" + str(len(内容)) + " 个文件")
-    if args.zip路径:
-        z = pathlib.Path(args.zip路径)
+    if z is not None:
         写zip(z, 内容)
         print("打好 " + str(z) + "：" + str(len(名单)) + " 件 skill，" + str(len(内容)) + " 个文件，"
               + str(z.stat().st_size // 1024) + " KB")

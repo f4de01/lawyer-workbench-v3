@@ -97,6 +97,13 @@ class 结算前(unittest.TestCase):
         self.assertEqual(r.returncode, 1)
         self.assertIn("changeset", r.stderr)
 
+    def test_干跑时允许没有待结算的changeset(self):
+        # PR 上那次干跑复用同一个 preflight。刚发完版 .changeset 空着的时候，改发布脚本的
+        # PR 不该红在「没什么可发的」这个与它无关的理由上（#96 评审）。
+        假仓库(self.根, changesets=())
+        r = 跑("preflight", "--root", str(self.根), "--allow-no-changeset")
+        self.assertEqual(r.returncode, 0, r.stderr)
+
     def test_工作树不干净即停(self):
         假仓库(self.根)
         (self.根 / "脏的.md").write_text("x", encoding="utf-8")
@@ -141,6 +148,14 @@ class 结算后(unittest.TestCase):
         self.assertEqual(r.returncode, 1)
         self.assertIn("CHANGELOG", r.stderr)
 
+    def test_没有CHANGELOG文件也照样报一条不过(self):
+        假仓库(self.根, 版本="0.2.0", changesets=())
+        (self.根 / "CHANGELOG.md").unlink()
+        r = 跑("postflight", "--root", str(self.根), "--previous", "0.1.0")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("CHANGELOG", r.stderr)
+        self.assertNotIn("Traceback", r.stderr)
+
     def test_tag已经在了即停(self):
         r = self.postflight(tags=("v0.2.0",))
         self.assertEqual(r.returncode, 1)
@@ -170,12 +185,39 @@ class 抽发布说明(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("老东西", self.出.read_text(encoding="utf-8"))
 
+    def test_没有CHANGELOG文件即停(self):
+        假仓库(self.根, 版本="0.2.0", changesets=())
+        (self.根 / "CHANGELOG.md").unlink()
+        r = 跑("notes", "--root", str(self.根), "--out", str(self.出))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("CHANGELOG", r.stderr)
+        self.assertNotIn("Traceback", r.stderr)
+        self.assertFalse(self.出.exists())
+
     def test_缺这一节即停(self):
         假仓库(self.根, 版本="9.9.9", changesets=())
         r = 跑("notes", "--root", str(self.根), "--out", str(self.出))
         self.assertEqual(r.returncode, 1)
         self.assertIn("9.9.9", r.stderr)
         self.assertFalse(self.出.exists())
+
+
+class 数待结算的(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.根 = pathlib.Path(self.tmp.name) / "repo"
+
+    def test_一份没有就是0(self):
+        假仓库(self.根, changesets=())
+        r = 跑("pending", "--root", str(self.根))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.strip(), "0")
+
+    def test_数的是md不算README(self):
+        假仓库(self.根, changesets=("aaa.md", "bbb.md"))
+        r = 跑("pending", "--root", str(self.根))
+        self.assertEqual(r.stdout.strip(), "2")
 
 
 class 真仓库(unittest.TestCase):

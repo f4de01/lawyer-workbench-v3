@@ -104,6 +104,20 @@ class 打包(unittest.TestCase):
         self.assertEqual(r.returncode, 1)
         self.assertIn("非空", r.stderr)
 
+    def test_zip已经在了即停(self):
+        self.出.write_bytes(b"old")
+        r = 跑("--root", str(self.根), "--zip", str(self.出))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("已经在", r.stderr)
+        self.assertEqual(self.出.read_bytes(), b"old")
+
+    def test_目录那个位置是个文件即停(self):
+        占位 = pathlib.Path(self.tmp.name) / "兜底"
+        占位.write_text("x", encoding="utf-8")
+        r = 跑("--root", str(self.根), "--dir", str(占位))
+        self.assertEqual(r.returncode, 1)
+        self.assertNotIn("Traceback", r.stderr)
+
     def test_没给出口即用法错(self):
         r = 跑("--root", str(self.根))
         self.assertEqual(r.returncode, 2)
