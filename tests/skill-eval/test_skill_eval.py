@@ -624,6 +624,25 @@ class MaterializeTest(unittest.TestCase):
         self.assertEqual((ws / "回放留下的.txt").read_text(encoding="utf-8"), "ok")
         self.assertFalse((ws / "状态.md").exists(), "种子的元文件不进工作区")
 
+    def test_活图在工作区里的种子回显出要设的活图家(self):
+        """回放自己兜底管不到 harness 里的模型：它跑 sketch.py home 时没有这个变量就写真的 ~/.loo0ng（#105）。"""
+        种子 = self.tmp / "evals" / "种子" / "带活图的"
+        种子.mkdir(parents=True)
+        write(种子, "回放.py", textwrap.dedent('''
+            import pathlib, sys
+            (pathlib.Path(sys.argv[1]) / ".活图家" / "领域" / "菜园").mkdir(parents=True)
+        '''))
+        code, 输出 = self.跑(["--materialize", "带活图的", "--evals", str(self.用例根)])
+        self.assertEqual(code, 0, 输出)
+        ws = self.生出的[0]
+        self.assertIn("%s=%s" % (skill_eval.LIVE_HOME_ENV, ws / skill_eval.WS_LIVE_HOME), 输出,
+                      "该回显触发之前要设的活图家：\n%s" % 输出)
+
+    def test_活图不在工作区里的种子不多回显一行(self):
+        code, 输出 = self.跑(["--materialize", "小种子", "--evals", str(self.用例根)])
+        self.assertEqual(code, 0, 输出)
+        self.assertNotIn(skill_eval.LIVE_HOME_ENV, 输出, "没有活图的种子照旧只打印一行路径")
+
     def test_工作区不被删掉(self):
         code, 输出 = self.跑(["--materialize", "小种子", "--evals", str(self.用例根)])
         self.assertEqual(code, 0, 输出)

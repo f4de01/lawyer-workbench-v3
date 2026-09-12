@@ -54,6 +54,7 @@ DEFAULT_TIMEOUT = 300
 CASE_KEYS = {"种子", "skill", "回复正则", "回合上限", "超时秒", "允许工具", "Codex沙箱", "说明"}
 CODEX_SANDBOXES = ("workspace-write", "danger-full-access")
 LIVE_HOME_ENV = "LOO0NG_HOME"  # 活图的「家」，与 skills/loo0ng-domain/scripts/sketch.py 同一个名字
+WS_LIVE_HOME = ".活图家"        # 没设 LIVE_HOME_ENV 时回放把活图落在工作区里的这个目录（evals/共用/回放助手.py）
 DEFAULT_CODEX_SANDBOX = "workspace-write"
 CASE_REQUIRED = ("种子", "回复正则")
 SEED_META_FILES = ("回放.py", "状态.md")
@@ -529,6 +530,14 @@ def materialize(opts, out) -> int:
         print("错误：%s" % e, file=sys.stderr)
         return 2
     print(str(workspace), file=out)
+    # 活图落在工作区里的种子：触发之前必须把这个变量设进环境。回放自己兜底只管回放那几条命令，
+    # 管不到 harness 里的模型：它自己跑 sketch.py home 时没有这个变量就解析到真的 ~/.loo0ng，
+    # 一次关票触发就写进了开发者自己那份活图（#105 在 Codex 侧实测到）。
+    家 = workspace / WS_LIVE_HOME
+    if 家.is_dir():
+        print("%s=%s" % (LIVE_HOME_ENV, 家), file=out)
+        print("这个种子的活图在工作区里。触发之前把上面这个变量设进环境，"
+              "否则模型自己跑 sketch.py home 会写到真的 ~/.loo0ng（#105）。", file=out)
     return 0
 
 
