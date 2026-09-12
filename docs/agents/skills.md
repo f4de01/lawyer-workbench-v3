@@ -183,7 +183,20 @@ MSYS_NO_PATHCONV=1 CLAUDECODE= CLAUDE_CODE_ENTRYPOINT= \
 
 ## 发布
 
-改名、改功能都是一次发布，只在开发者维护时做（ADR-0009）：`npm run changeset` 写条目，`npm run version` 合成 `CHANGELOG.md`、升 `package.json` 并同步两份插件清单与 `package-lock.json` 的版本，提交、打 tag。流程细节在 `.changeset/README.md`。
+改名、改功能都是一次发布，只在开发者维护时做（ADR-0009）。`npm run changeset` 写条目，**结算走 `.github/workflows/release.yml`**（#96）：Actions -> release -> Run workflow，先按默认的干跑跑一次、读 job summary 里结算出来的那一节 `CHANGELOG`，读顺了再在 `main` 上关掉 `dry_run` 跑一次真发。真发那次做的是 `npm run version`（合成 `CHANGELOG.md`、升 `package.json` 并同步两份插件清单与 `package-lock.json` 的版本）、提交、打 tag、发 Release 并附离线兜底包。
+
+两道闸门卡在结算前后：`python scripts/release.py preflight` / `postflight`，上面「其他检查」里的 `gen-openai-yaml.py --check` 与 `check-plugin-version` 就在它们里面，跑挂即停（测试在 `tests/release/`）。手工路、攒几份再结算的手艺与要读什么，都在 `.changeset/README.md`。
+
+上 CI 的只有发布这一条路：ADR-0015 的 2026-09-12 附注把「全部本地不做 CI」的射程划回测试与门禁那一层，脚本层单测、两侧 eval、版式门禁仍然全部本地跑。
+
+离线兜底包也可以随时单打（`docs/交付/现场清单.md` 段 0 P2 要的就是它）：
+
+```bash
+python scripts/pack-offline.py --dir ~/交付包/skills-兜底     # 目录，目录须不存在或为空
+python scripts/pack-offline.py --zip ~/交付包/skills.zip      # zip，内以 skills/ 为根
+```
+
+名单取自 `.claude-plugin/plugin.json` 的 `skills` 数组（登记清单只此一份），文本一律转 LF，任一文件带 BOM 即停（#20）。
 
 ## 分发事实（#18，2026-09-05 实测）
 
