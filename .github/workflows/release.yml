@@ -41,7 +41,8 @@ jobs:
     env:
       # 只有在 main 上手动跑且把 dry_run 关掉，才真发一版；别的一律干跑
       DRY_RUN: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run }}
-      OUT: ${{ runner.temp }}/release-out
+      # 产物落在仓库外：结算之后那次 git add -A 不能把 zip 一起提交了
+      OUT: /tmp/release-out
     steps:
       - uses: actions/checkout@v4
         with:
