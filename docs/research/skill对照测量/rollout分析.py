@@ -136,11 +136,18 @@ def analyse(path):
     first_ts = last_ts = None
     task_started = task_complete = None
     user_msgs = []
+    models = []         # 每个 turn_context 报一次；六轮要核对是不是同一个模型同一档强度
+    efforts = []
 
     for ts, kind, ptype, payload in events:
         if ts is not None:
             first_ts = ts if first_ts is None else min(first_ts, ts)
             last_ts = ts if last_ts is None else max(last_ts, ts)
+        if kind == "turn_context" and isinstance(payload, dict):
+            if payload.get("model"):
+                models.append(payload["model"])
+            if payload.get("effort"):
+                efforts.append(payload["effort"])
         if ptype == "task_started" and task_started is None:
             task_started = ts
         elif ptype == "task_complete":
@@ -208,6 +215,8 @@ def analyse(path):
         "文件": str(path),
         "宿主": meta.get("originator"),
         "版本": meta.get("cli_version"),
+        "模型": "/".join(sorted(set(models))) or None,
+        "强度": "/".join(sorted(set(efforts))) or None,
         "工作区": meta.get("cwd"),
         "起": datetime.fromtimestamp(start, timezone.utc).isoformat() if start else None,
         "总墙钟": round(wall, 1),
@@ -236,6 +245,7 @@ def report(r, verbose=False):
     print("=" * 72)
     print("文件 {}".format(r["文件"]))
     print("宿主 {}  版本 {}".format(r["宿主"], r["版本"]))
+    print("模型 {}  强度 {}".format(r["模型"], r["强度"]))
     print("工作区 {}".format(r["工作区"]))
     print("首句 {}".format(r["首句"]))
     print("-" * 72)
@@ -276,6 +286,13 @@ def compare(results):
             ("被截断的输出", ""), ("未命中缓存的输入", "tok"), ("缓存命中率", "%")]
     names = [Path(r["文件"]).name[:22] for r in results]
     print("{:<20}".format("") + "".join("{:>24}".format(n) for n in names))
+    for key in ("模型", "强度"):
+        print("{:<20}".format(key) + "".join("{:>24}".format(str(r.get(key))) for r in results))
+    mods = set(str(r.get("模型")) for r in results)
+    effs = set(str(r.get("强度")) for r in results)
+    if len(mods) > 1 or len(effs) > 1:
+        print(">>> 警告：这几轮不是同一个模型或同一档强度，不能直接比。")
+    print()
     for key, unit in keys:
         row = "{:<20}".format(key + ("(" + unit + ")" if unit else ""))
         for r in results:
