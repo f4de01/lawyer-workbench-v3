@@ -1,0 +1,185 @@
+flowchart TB
+  subgraph m_jieshou_zhiding["接受指定与报备"]
+    direction LR
+    n_chengnuoshu["管理人承诺书及团队人员"]:::s2
+    n_gongzuo_jihua["管理人工作计划"]:::s0
+    n_neibu_zhidu["内部管理制度备案报告"]:::s0
+    n_kezhang_shenqing["刻制管理人公章的申请"]:::s0
+    n_yinzhang_beian["管理人印章备案报告"]:::s1
+    n_zhanghu_beian["管理人银行账户备案报告"]:::s0
+    n_chengnuoshu ~~~ n_gongzuo_jihua
+    n_gongzuo_jihua ~~~ n_neibu_zhidu
+    n_neibu_zhidu ~~~ n_kezhang_shenqing
+    n_kezhang_shenqing ~~~ n_yinzhang_beian
+    n_yinzhang_beian ~~~ n_zhanghu_beian
+  end
+  subgraph m_jieguan_diaocha["接管与调查"]
+    direction LR
+    n_zhangtie_beian["张贴法律文书的备案材料"]:::s0
+    n_jieguan_fangan["接管方案"]:::s0
+    n_jieguan_baogao["财产接管报告"]:::s0
+    n_gaozhi_han["解除保全与中止诉讼、仲裁、执行的告知函"]:::s0
+    n_diaocha_bilu["债务人有关人员调查笔录"]:::s0
+    n_caichan_zhuangkuang["债务人财产状况报告"]:::s0
+    n_yingye_shenqing["继续或停止营业的申请"]:::s0
+    n_zhangtie_beian ~~~ n_jieguan_fangan
+    n_jieguan_fangan ~~~ n_jieguan_baogao
+    n_jieguan_baogao ~~~ n_gaozhi_han
+    n_gaozhi_han ~~~ n_diaocha_bilu
+    n_diaocha_bilu ~~~ n_caichan_zhuangkuang
+    n_caichan_zhuangkuang ~~~ n_yingye_shenqing
+  end
+  subgraph m_zhaiquan_tongzhi["债权通知与审查"]
+    direction LR
+    n_shenbao_guize["债权申报与审核流程规则"]:::s0
+    n_shenbao_tongzhi["已知债权人债权申报通知"]:::s0
+    n_dengji_ce["债权申报登记册"]:::s0
+    n_zhigong_biao["职工债权表"]:::s0
+    n_zhaiquan_biao["债权表"]:::s0
+    n_hecha_baogao["债权核查报告"]:::s0
+    n_yiyi_huifu["异议债权复核结果书面通知"]:::s0
+    n_shenbao_guize ~~~ n_shenbao_tongzhi
+    n_shenbao_tongzhi ~~~ n_dengji_ce
+    n_dengji_ce ~~~ n_zhigong_biao
+    n_zhigong_biao ~~~ n_zhaiquan_biao
+    n_zhaiquan_biao ~~~ n_hecha_baogao
+    n_hecha_baogao ~~~ n_yiyi_huifu
+  end
+  subgraph m_caichan_guanli["财产管理与追收"]
+    direction LR
+    n_guanli_fangan["财产管理方案"]:::s0
+    n_qingchang_tongzhi["向次债务人、财产持有人的清偿或交付通知书"]:::s0
+    n_huiqian_baogao["会前紧急处置的书面报告"]:::s0
+    n_danbaowu_tongzhi["担保物取回通知书"]:::s0
+    n_hetong_tongzhi["合同解除或继续履行通知"]:::s0
+    n_chuzi_tongzhi["出资人限期缴纳出资通知书"]:::s0
+    n_fanhuan_tongzhi["董事监事高管返还非正常收入与侵占财产通知书"]:::s0
+    n_susong_fangan["诉讼方案"]:::s0
+    n_guanli_fangan ~~~ n_qingchang_tongzhi
+    n_qingchang_tongzhi ~~~ n_huiqian_baogao
+    n_huiqian_baogao ~~~ n_danbaowu_tongzhi
+    n_danbaowu_tongzhi ~~~ n_hetong_tongzhi
+    n_hetong_tongzhi ~~~ n_chuzi_tongzhi
+    n_chuzi_tongzhi ~~~ n_fanhuan_tongzhi
+    n_fanhuan_tongzhi ~~~ n_susong_fangan
+  end
+  subgraph m_zhaiquanren_huiyi["债权人会议"]
+    direction LR
+    n_huiyi_tongzhi["债权人会议通知书"]:::s0
+    n_jieduanxing_baogao["管理人执行职务阶段性工作报告"]:::s0
+    n_feiyong_baogao["破产费用与共益债务情况报告"]:::s0
+    n_biaojue_guize["债权人会议表决规则"]:::s0
+    n_zhuxi_shenqing["债权人会议主席建议人选申请书"]:::s0
+    n_linshi_zhaiquan["确认临时债权额的申请"]:::s0
+    n_zhaiweihui_shenqing["债权人委员会成员认可申请"]:::s0
+    n_huiyi_jilu["第一次债权人会议会议记录"]:::s0
+    n_huiyi_baogao["债权人会议召开与表决情况报告"]:::s0
+    n_zaici_hecha["调整或补充申报债权的再次核查报告"]:::s0
+    n_huiyi_tongzhi ~~~ n_jieduanxing_baogao
+    n_jieduanxing_baogao ~~~ n_feiyong_baogao
+    n_feiyong_baogao ~~~ n_biaojue_guize
+    n_biaojue_guize ~~~ n_zhuxi_shenqing
+    n_zhuxi_shenqing ~~~ n_linshi_zhaiquan
+    n_linshi_zhaiquan ~~~ n_zhaiweihui_shenqing
+    n_zhaiweihui_shenqing ~~~ n_huiyi_jilu
+    n_huiyi_jilu ~~~ n_huiyi_baogao
+    n_huiyi_baogao ~~~ n_zaici_hecha
+  end
+  subgraph m_queren_zhaiquan["申请确认债权"]
+    direction LR
+    n_queren_wuyiyi["裁定确认无异议债权的申请"]:::s0
+    n_buchong_queren["裁定补充确认债权的申请"]:::s0
+    n_queren_wuyiyi ~~~ n_buchong_queren
+  end
+  subgraph m_caichan_chuzhi["财产处置与确认成交"]
+    direction LR
+    n_bianjia_fangan["财产变价方案"]:::s0
+    n_renke_bianjia["裁定认可财产变价方案的申请"]:::s0
+    n_chufen_baogao["财产处分前的书面报告"]:::s0
+    n_paimai_gonggao["拍卖公告"]:::s0
+    n_chengjiao_queren["成交确认书"]:::s0
+    n_queren_chengjiao["裁定确认成交的申请"]:::s0
+    n_bianjia_fangan ~~~ n_renke_bianjia
+    n_renke_bianjia ~~~ n_chufen_baogao
+    n_chufen_baogao ~~~ n_paimai_gonggao
+    n_paimai_gonggao ~~~ n_chengjiao_queren
+    n_chengjiao_queren ~~~ n_queren_chengjiao
+  end
+  subgraph m_xuangao_pochan["宣告破产"]
+    direction LR
+    n_xuangao_fenpei["裁定宣告破产的申请（后续需要分配财产）"]:::s0
+    n_xuangao_feiyong["裁定宣告破产并终结的申请（财产不足以支付破产费用）"]:::s0
+    n_xuangao_wucaichan["裁定宣告破产并终结的申请（无财产可供分配）"]:::s0
+    n_xuangao_fenpei ~~~ n_xuangao_feiyong
+    n_xuangao_feiyong ~~~ n_xuangao_wucaichan
+  end
+  subgraph m_caichan_fenpei["财产分配"]
+    direction LR
+    n_fenpei_fangan["破产财产分配方案"]:::s0
+    n_renke_fenpei["裁定认可分配方案的申请"]:::s0
+    n_shishi_fangan["实施方案或分配细则"]:::s0
+    n_renke_shishi["裁定认可分配方案及实施方案的申请"]:::s0
+    n_fenpei_gonggao["破产财产分配公告"]:::s0
+    n_fenpei_baogao["破产财产分配报告"]:::s0
+    n_fenpei_fangan ~~~ n_renke_fenpei
+    n_renke_fenpei ~~~ n_shishi_fangan
+    n_shishi_fangan ~~~ n_renke_shishi
+    n_renke_shishi ~~~ n_fenpei_gonggao
+    n_fenpei_gonggao ~~~ n_fenpei_baogao
+  end
+  subgraph m_zhongjie_zhuxiao["终结与注销"]
+    direction LR
+    n_zhongjie_gaozhi["终结前告知债权人的材料"]:::s0
+    n_zhongjie_shenqing["终结破产程序的申请（现有财产分配完毕）"]:::s0
+    n_qingsuan_baogao["终结破产程序的清算报告"]:::s0
+    n_lvzhi_baogao["管理人履职报告"]:::s0
+    n_jiean_dengjibiao["结案登记表"]:::s0
+    n_baochou_shenqing["确定管理人报酬的申请"]:::s0
+    n_quanbu_qingchang["终结破产程序的申请（全部清偿或第三人担保清偿）"]:::s0
+    n_zhongzhi_zhiwu["终止管理人执行职务的申请"]:::s0
+    n_jiean_zipping["结案自评报告"]:::s0
+    n_zhongjie_gaozhi ~~~ n_zhongjie_shenqing
+    n_zhongjie_shenqing ~~~ n_qingsuan_baogao
+    n_qingsuan_baogao ~~~ n_lvzhi_baogao
+    n_lvzhi_baogao ~~~ n_jiean_dengjibiao
+    n_jiean_dengjibiao ~~~ n_baochou_shenqing
+    n_baochou_shenqing ~~~ n_quanbu_qingchang
+    n_quanbu_qingchang ~~~ n_zhongzhi_zhiwu
+    n_zhongzhi_zhiwu ~~~ n_jiean_zipping
+  end
+  subgraph m_zixing_hejie["自行和解"]
+    direction LR
+    n_hejie_xieyi["和解协议"]:::s0
+    n_renke_hejie["裁定认可和解协议并终结破产程序的申请"]:::s0
+    n_hejie_xieyi ~~~ n_renke_hejie
+  end
+  subgraph m_qiangzhi_qingsuan["强制清算"]
+    direction LR
+    n_qingsuan_fangan["清算方案"]:::s0
+    n_renke_qingsuan["裁定认可清算方案的申请"]:::s0
+    n_qiangqing_baogao["强制清算的清算报告"]:::s0
+    n_wufa_qingsuan["认可清算报告并终结强制清算程序的申请（无法清算）"]:::s0
+    n_qingsuan_wanbi["认可清算报告并终结强制清算程序的申请（清算方案执行完毕）"]:::s0
+    n_zhuan_pochan["对公司进行破产清算并宣告破产的申请（转破产程序）"]:::s0
+    n_qingsuan_fangan ~~~ n_renke_qingsuan
+    n_renke_qingsuan ~~~ n_qiangqing_baogao
+    n_qiangqing_baogao ~~~ n_wufa_qingsuan
+    n_wufa_qingsuan ~~~ n_qingsuan_wanbi
+    n_qingsuan_wanbi ~~~ n_zhuan_pochan
+  end
+  m_jieshou_zhiding ~~~ m_jieguan_diaocha
+  m_jieguan_diaocha ~~~ m_zhaiquan_tongzhi
+  m_zhaiquan_tongzhi ~~~ m_caichan_guanli
+  m_caichan_guanli ~~~ m_zhaiquanren_huiyi
+  m_zhaiquanren_huiyi ~~~ m_queren_zhaiquan
+  m_queren_zhaiquan ~~~ m_caichan_chuzhi
+  m_caichan_chuzhi ~~~ m_xuangao_pochan
+  m_xuangao_pochan ~~~ m_caichan_fenpei
+  m_caichan_fenpei ~~~ m_zhongjie_zhuxiao
+  m_zhongjie_zhuxiao ~~~ m_zixing_hejie
+  m_zixing_hejie ~~~ m_qiangzhi_qingsuan
+  classDef s0 fill:#f4f4f5,stroke:#71717a,color:#18181b
+  classDef s1 fill:#fde68a,stroke:#71717a,color:#18181b
+  classDef s2 fill:#86efac,stroke:#71717a,color:#18181b
+  classDef s3 fill:#e4e4e7,stroke:#71717a,color:#18181b
+  classDef s4 fill:#ffffff,stroke:#71717a,color:#18181b
