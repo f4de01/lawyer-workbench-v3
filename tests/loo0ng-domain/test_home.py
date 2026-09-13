@@ -11,9 +11,12 @@ import contextlib
 import hashlib
 import importlib.util
 import io
+import json
 import os
 import pathlib
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -67,8 +70,8 @@ class Base(unittest.TestCase):
                 code = e.code if isinstance(e.code, int) else 2
         return Run(code, out.getvalue(), err.getvalue())
 
-    def home(self, name="菜园"):
-        return self.cli("home", "--name", name,
+    def home(self, name="菜园", *extra):
+        return self.cli("home", "--name", name, *extra,
                         "--live-root", str(self.live_root), "--seed-root", str(self.seed_root))
 
     @property
@@ -102,12 +105,73 @@ class 首次起手拷种子(Base):
         r = self.home("没有这个领域")
         self.assertEqual(r.code, 1, r)
         self.assertIn("空图起手", r.err, "拒的时候要说清新领域怎么办：%r" % r)
+        self.assertIn("--empty", r.err, "拒的时候也要指出开发侧造这个领域走哪条路（#103）：%r" % r)
         self.assertFalse((self.live_root / "没有这个领域").exists(), "拒绝时不该建半个目录")
 
     def test_领域名不能带路径分隔符(self):
         for bad in ("../外面", "破产/模板", "a\\b", ".", ""):
             r = self.home(bad)
             self.assertEqual(r.code, 1, "%r 应被拒：%r" % (bad, r))
+
+
+class 新领域从空图起手(Base):
+    """home --empty（#103 验收，ADR-0020）：开发者造一份全新领域的种子，起点是这里。
+
+    两侧同一条路的意思就是开发侧也享受「新领域从空图起手」这条低入场费；卡在「活图建不出来」
+    那就不是同一条路。
+    """
+
+    def test_建目录并起一份空领域图(self):
+        新 = self.live_root / "果园"
+        r = self.home("果园", "--empty")
+        self.assertEqual(r.code, 0, r)
+        self.assertTrue(新.is_dir(), "活图目录没建出来：%r" % r)
+        self.assertEqual(sorted(p.name for p in 新.iterdir()), ["领域图.json"],
+                         "--empty 只起领域图，模板/ 与 指引手册/ 等它有内容了再建")
+        data = json.loads((新 / "领域图.json").read_text(encoding="utf-8"))
+        self.assertEqual(data, {"格式版本": 1, "领域": "果园", "模块": []})
+
+    def test_回显第一行仍是活图的绝对路径(self):
+        r = self.home("果园", "--empty")
+        第一行 = r.out.splitlines()[0]
+        self.assertTrue(第一行.startswith("活图："), "第一行要能让模型直接取路径：%r" % 第一行)
+        self.assertEqual(pathlib.Path(第一行.split("：", 1)[1]).resolve(),
+                         (self.live_root / "果园").resolve())
+
+    def test_起出来的空领域图引擎认(self):
+        """它是接下来逐节点回流要写的那一份：引擎读不动就白起了。"""
+        self.home("果园", "--empty")
+        engine = REPO / "skills" / "loo0ng-graph" / "scripts" / "graph.py"
+        r = subprocess.run([sys.executable, str(engine), "--graph",
+                            str(self.live_root / "果园" / "领域图.json"), "--kind", "domain", "validate"],
+                           capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_包里已有种子就拒且不建目录(self):
+        """不给它盖一份空的：种子在，不带 --empty 跑一次就是整份拷过去。"""
+        r = self.home("菜园", "--empty")
+        self.assertEqual(r.code, 1, r)
+        self.assertIn("出厂种子", r.err)
+        self.assertFalse(self.live.exists(), "拒绝时不该建半个目录")
+
+    def test_已有活图就一个字不动(self):
+        self.home("果园", "--empty")
+        (self.live_root / "果园" / "领域图.json").write_text(
+            '{"格式版本": 1, "领域": "果园", "模块": [{"id": "m-1", "标题": "剪枝", "节点": []}]}',
+            encoding="utf-8")
+        累计 = 指纹(self.live_root / "果园")
+        r = self.home("果园", "--empty")
+        self.assertEqual(r.code, 0, r)
+        self.assertEqual(指纹(self.live_root / "果园"), 累计, "第二次跑把活图覆盖了")
+        self.assertIn("一个字没动", r.out)
+
+    def test_引擎拒了就不留半个活图(self):
+        r = self.cli("home", "--name", "果园", "--empty", "--live-root", str(self.live_root),
+                     "--seed-root", str(self.seed_root), "--engine", str(self.tmp / "没有这个引擎.py"))
+        self.assertEqual(r.code, 1, r)
+        self.assertFalse((self.live_root / "果园").exists(), "拒绝时不该留下半个活图")
+        剩下 = sorted(p.name for p in self.live_root.iterdir()) if self.live_root.is_dir() else []
+        self.assertEqual(剩下, [], "活图根里不该留下拷贝用的临时目录：%s" % 剩下)
 
 
 class 已有活图就一个字不动(Base):

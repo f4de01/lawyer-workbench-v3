@@ -9,7 +9,8 @@
   python sketch.py apply     --proposal 雏形.json [--graph 图.json] [--kind case|domain] [--domain ...]
                              [--engine graph.py] [--as-new <标题>]...
   python sketch.py from-case --case 案件图.json --domain 领域图或领域目录 [--out 回流.json]
-  python sketch.py home      --name <领域名> [--live-root <活图根>] [--seed-root <种子根>]
+  python sketch.py home      --name <领域名> [--empty] [--live-root <活图根>] [--seed-root <种子根>] [--engine graph.py]
+  python sketch.py intake    --name <领域名> [--live-root <活图根>] [--seed-root <种子根>] [--engine graph.py]
   python sketch.py docx-text <文件.docx>
 
 docx-text 把一份 docx（指南、指引手册）的正文按段落打成纯文本，表格一行一行、格间用 | 隔开；模型整读它来提雏形。
@@ -20,8 +21,13 @@ from-case 是回流的第一步（ADR-0012）：从一份案件图里算出「�
       保留原 id，写成雏形文件；标题的去案件化改写由模型做，再 check / apply --kind domain。
 home 回显活图目录的绝对路径（ADR-0019）：活图不在就从 assets/ 下的出厂种子整个拷一份，已经在就一个字不动。
       律师累计在活图上的东西住 skill 包之外，包升级只换种子，碰不到活图。
+      --empty 是开发者造一份全新领域时的起点（ADR-0020）：活图不在、包里也没有种子，就在活图位置建目录
+      并经引擎起一份空领域图；包里已有种子时拒，不给它盖一份空的。
+intake 入库（ADR-0020）：把开发者活图那份 领域图.json 送进本仓库成为出厂种子，只在仓库里跑。
+      只拿这一份文件（模板/ 与 指引手册/ 是原件，走普通的 git 添加）；拷之前校验、拷之前把新增与改名分开回显。
+      它是一次拷贝，不经图引擎，也不是 skill 包的版本发布；入库要经第二双眼（硬边界 2），那是接下来的 PR。
 
-退出码：0 完成；1 拒绝（雏形不合格式、待定未定、引擎拒写、找不到文件）；2 用法错误。
+退出码：0 完成；1 拒绝（雏形不合格式、待定未定、引擎拒写、找不到文件、入库不在仓库里）；2 用法错误。
 """
 import argparse
 import difflib
@@ -332,6 +338,13 @@ def default_engine() -> pathlib.Path:
     return (pathlib.Path(__file__).resolve().parent / ENGINE_RELATIVE).resolve()
 
 
+def resolve_engine(given: Optional[str]) -> pathlib.Path:
+    engine = pathlib.Path(given).resolve() if given else default_engine()
+    if not engine.is_file():
+        raise Rejected("找不到图引擎 %s；用 --engine 指向 skill \"loo0ng-graph\" 的 scripts/graph.py" % engine)
+    return engine
+
+
 def engine_commands(plan: Plan, kind: str) -> List[Tuple[str, List[str]]]:
     """(条目描述, 引擎子命令参数)。案件图上不传 --id 与 --time-limit：id 由引擎生成，时限只住领域图。"""
     cmds = []
@@ -437,9 +450,7 @@ def cmd_apply(args) -> int:
     doomed = plan.doomed()
     if doomed:
         raise Rejected("有节点放错了模块，一字不写：%s。改雏形里的模块归属，或带入后用引擎 move-node 移动" % "；".join(doomed))
-    engine = pathlib.Path(args.engine) if args.engine else default_engine()
-    if not engine.is_file():
-        raise Rejected("找不到图引擎 %s；用 --engine 指向 skill \"loo0ng-graph\" 的 scripts/graph.py" % engine)
+    engine = resolve_engine(args.engine)
     cmds = engine_commands(plan, args.kind)
     if not cmds:
         print("没有要写的：雏形里的模块与节点都已在 %s 里。" % graph_path.name)
@@ -551,10 +562,37 @@ def copy_seed(seed: pathlib.Path, live: pathlib.Path) -> int:
     return sum(1 for x in live.rglob("*") if x.is_file())
 
 
-def cmd_home(args) -> int:
-    name = args.name
+def check_domain_name(name: str) -> str:
     if name in ("", ".", "..") or "/" in name or "\\" in name or ":" in name:
         raise Rejected("领域名是一个目录名，不能带路径分隔符，收到 %r" % name)
+    return name
+
+
+def init_empty(name: str, live: pathlib.Path, engine: pathlib.Path) -> str:
+    """在活图位置建目录，经引擎起一份空领域图（ADR-0020）：开发者造一份全新领域的种子从这里起步。
+
+    写图仍只经引擎子进程，本脚本不自己拼 JSON。与 copy_seed 一个形状：先落在同级的临时名上，
+    起完再改名，起到一半断了不会留下半份活图被下一次当成「已有活图」。回引擎那行原话。
+    """
+    live.parent.mkdir(parents=True, exist_ok=True)
+    staging = live.parent / ("%s%s-%d" % (live.name, STAGING_SUFFIX, os.getpid()))
+    shutil.rmtree(staging, ignore_errors=True)
+    try:
+        staging.mkdir(parents=True)
+        code, out, err = run_engine(engine, ["--graph", str(staging / DOMAIN_GRAPH_FILENAME), "--kind", "domain"],
+                                    ["init", "--empty", "--name", name])
+        if code != 0:
+            raise Rejected("引擎拒了空领域图，活图没建、一个字没写：%s" % (err or out or "引擎退出码 %d" % code))
+        os.replace(str(staging), str(live))
+    except OSError as e:
+        raise Rejected("建不出活图 %s：%s。一个字没写。" % (live.as_posix(), e)) from e
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+    return out
+
+
+def cmd_home(args) -> int:
+    name = check_domain_name(args.name)
     live = live_root(args.live_root) / name
     seed = seed_root(args.seed_root) / name
     if live.is_dir():
@@ -563,15 +601,158 @@ def cmd_home(args) -> int:
         return 0
     if live.exists():
         raise Rejected("%s 已经存在但不是目录：活图位置被占了，挪开它再起手。" % live.as_posix())
+    if args.empty:
+        if seed.is_dir():
+            raise Rejected("领域「%s」包里已经有出厂种子 %s：--empty 只给还没有种子的新领域用，"
+                           "不带 --empty 再跑一次就从种子整份拷一份过去。" % (name, seed.as_posix()))
+        note = init_empty(name, live, resolve_engine(args.engine))
+        print("活图：%s" % live.as_posix())
+        print("新领域从空图起手：活图位置上没有这个领域、包里也没有出厂种子，已在活图位置建了目录并起一份空领域图。")
+        if note:
+            print(note)
+        print("官方模板原件与指引手册原文自己放进 %s 下的 模板/ 与 指引手册/（ADR-0004）；"
+              "模块与节点办一遍案子回流进来（本 skill 正文「回流」），攒够了再 intake 入库成出厂种子。"
+              % live.as_posix())
+        return 0
     if not seed.is_dir():
-        raise Rejected("既没有活图 %s，也没有出厂种子 %s：新领域从空图起手（skill \"loo0ng-setup-case\" 的 "
-                       "init --empty --name %s，不给 --domain），领域目录等它有内容了再建。"
+        raise Rejected("既没有活图 %s，也没有出厂种子 %s：律师侧的新领域从空图起手（skill \"loo0ng-setup-case\" 的 "
+                       "init --empty --name %s，不给 --domain），领域目录等它有内容了再建；"
+                       "开发侧要造这个领域的领域图，加 --empty 再跑一次，它在活图位置建目录并起一份空领域图。"
                        % (live.as_posix(), seed.as_posix(), name))
     count = copy_seed(seed, live)
     print("活图：%s" % live.as_posix())
     print("首次起手：活图位置上还没有这个领域，已从出厂种子 %s 整份拷了 %d 件过去。"
           % (seed.as_posix(), count))
     print("往后只认活图：律师改的写在这里，skill 包升级只换种子，碰不到它。")
+    return 0
+
+
+# ---------------------------------------------------------------- intake（入库，ADR-0020）
+
+def in_repo(path: pathlib.Path) -> bool:
+    """祖先里有 .git。只用来判入库的落点在不在一个工作树里，与引擎那条「包内种子谁都不许写」
+    无关：ADR-0020 拒的是拿 .git 去认「这是不是开发会话」（会误伤把活图放进 git 备份的律师），
+    这里判的是被写的那一份种子在不在仓库里，方向相反。"""
+    for d in [path] + list(path.parents):
+        if (d / ".git").exists():
+            return True
+    return False
+
+
+def graph_template_text(value) -> str:
+    if isinstance(value, dict):
+        return "%s %s" % (value.get("来源"), value.get("文件"))
+    return NO_TEMPLATE
+
+
+def index_domain(data) -> Tuple[Dict[str, dict], Dict[str, Tuple[dict, dict]]]:
+    """(id -> 模块, id -> (所在模块, 节点))。入库的 diff 按 id 比，标题改了也认得出是同一个。"""
+    modules: Dict[str, dict] = {}
+    nodes: Dict[str, Tuple[dict, dict]] = {}
+    for m in data.get("模块", []):
+        modules[m["id"]] = m
+        for n in m.get("节点", []):
+            nodes[n["id"]] = (m, n)
+    return modules, nodes
+
+
+def diff_domain(seed, live) -> Dict[str, List[str]]:
+    """活图这份领域图比种子多了/改了什么。新增、改名、改属性、改归属、种子里有而活图里没有，各一栏。
+
+    分栏是本条的重点（ADR-0020）：开发者的活图里混着他试办案子回流进去的东西，入库是整份送进去，
+    第二双眼与隐私钩子之前，这几行是第一道人眼过滤。
+    """
+    s_modules, s_nodes = index_domain(seed) if seed is not None else ({}, {})
+    l_modules, l_nodes = index_domain(live)
+    out = {"新增模块": [], "新增节点": [], "改名": [], "改属性": [], "改归属": [], "只在种子里": []}
+    for mid, m in l_modules.items():
+        if mid not in s_modules:
+            out["新增模块"].append("模块「%s」（id %s，%d 个节点）" % (m["标题"], mid, len(m.get("节点", []))))
+        elif s_modules[mid]["标题"] != m["标题"]:
+            out["改名"].append("模块 %s：「%s」→「%s」" % (mid, s_modules[mid]["标题"], m["标题"]))
+    for nid, (owner, n) in l_nodes.items():
+        if nid not in s_nodes:
+            out["新增节点"].append("节点「%s」（模块「%s」，id %s，空白模板 %s%s）" % (
+                n["标题"], owner["标题"], nid, graph_template_text(n["空白模板"]),
+                "，有时限句" if n.get("时限") else ""))
+            continue
+        s_owner, s_node = s_nodes[nid]
+        if s_node["标题"] != n["标题"]:
+            out["改名"].append("节点 %s：「%s」→「%s」" % (nid, s_node["标题"], n["标题"]))
+        if s_node["空白模板"] != n["空白模板"]:
+            out["改属性"].append("节点 %s「%s」：空白模板 %s → %s" % (
+                nid, n["标题"], graph_template_text(s_node["空白模板"]), graph_template_text(n["空白模板"])))
+        if s_node.get("时限") != n.get("时限"):
+            out["改属性"].append("节点 %s「%s」：时限 %s → %s" % (
+                nid, n["标题"], s_node.get("时限") or "（无）", n.get("时限") or "（无）"))
+        if s_owner["id"] != owner["id"]:
+            out["改归属"].append("节点 %s「%s」：模块「%s」→「%s」" % (
+                nid, n["标题"], s_owner["标题"], owner["标题"]))
+    for mid, m in s_modules.items():
+        if mid not in l_modules:
+            out["只在种子里"].append("模块 %s「%s」" % (mid, m["标题"]))
+    for nid, (_, n) in s_nodes.items():
+        if nid not in l_nodes:
+            out["只在种子里"].append("节点 %s「%s」" % (nid, n["标题"]))
+    return out
+
+
+def cmd_intake(args) -> int:
+    name = check_domain_name(args.name)
+    live_dir = live_root(args.live_root) / name
+    live_graph = live_dir / DOMAIN_GRAPH_FILENAME
+    seeds = seed_root(args.seed_root)
+    seed_dir = seeds / name
+    seed_graph = seed_dir / DOMAIN_GRAPH_FILENAME
+    if not in_repo(seeds):
+        raise Rejected("入库只在本仓库里做（ADR-0020）：种子根 %s 的祖先里没有 .git，"
+                       "你手上这份是装好的 skill 包，写进去下一次升级就被整个换掉。"
+                       "克隆仓库、在仓库里的 skills/loo0ng-domain/scripts/sketch.py 上跑这一条。" % seeds.as_posix())
+    if not live_graph.is_file():
+        raise Rejected("找不到活图那份领域图 %s：入库的起点是开发者自己的活图（先 home，"
+                       "新领域用 home --empty）。" % live_graph.as_posix())
+    code, out, err = run_engine(resolve_engine(args.engine),
+                                ["--graph", str(live_graph), "--kind", "domain"], ["validate"])
+    if code != 0:
+        raise Rejected("活图那份领域图不合校验，一个字没拷：%s" % (err or out or "引擎退出码 %d" % code))
+    live = read_json(live_graph, "活图的领域图")
+    if live.get("领域") != name:
+        raise Rejected("活图那份领域图里写的领域是「%s」，与 --name %s 对不上：入库会把它放进种子的 %s/ 下，"
+                       "两边对不上说明拿错了目录。" % (live.get("领域"), name, name))
+    seed = read_json(seed_graph, "出厂种子") if seed_graph.is_file() else None
+    print("入库：领域「%s」" % name)
+    print("  活图 %s" % live_graph.as_posix())
+    print("  种子 %s%s" % (seed_graph.as_posix(), "" if seed is not None else "（仓库里还没有，这是第一次入库）"))
+    d = diff_domain(seed, live)
+    print("这次比种子多了 %d 个模块、%d 个节点，改了 %d 个标题、%d 处属性、%d 处归属；种子里有而活图里没有的 %d 个。"
+          % (len(d["新增模块"]), len(d["新增节点"]), len(d["改名"]), len(d["改属性"]),
+             len(d["改归属"]), len(d["只在种子里"])))
+    for 栏 in ("新增模块", "新增节点", "改名", "改属性", "改归属", "只在种子里"):
+        if d[栏]:
+            print("%s（%d）：" % ("种子里有、活图里没有" if 栏 == "只在种子里" else 栏, len(d[栏])))
+            for line in d[栏]:
+                print("- %s" % line)
+    if d["只在种子里"]:
+        print("上面这几个入库之后种子里就没有了：入库是整份换掉，不是两份合并。要留着它们，先在活图上补回来再入库。")
+    if seed_graph.is_file() and seed_graph.read_bytes() == live_graph.read_bytes():
+        print("与种子逐字相同，一个字没拷：没有要入库的。")
+        return 0
+    seed_dir.mkdir(parents=True, exist_ok=True)
+    tmp = seed_graph.with_name(seed_graph.name + STAGING_SUFFIX)
+    try:
+        shutil.copyfile(str(live_graph), str(tmp))
+        os.replace(str(tmp), str(seed_graph))
+    except OSError as e:
+        if tmp.exists():
+            tmp.unlink()
+        raise Rejected("拷不进种子 %s：%s。种子一个字没改。" % (seed_graph.as_posix(), e)) from e
+    print("已入库：%s。只这一份 %s；%s 下的 模板/ 与 指引手册/ 一个字没动，"
+          "官方模板原件与指引手册原文是原件，走普通的 git 添加。" % (seed_graph.as_posix(), DOMAIN_GRAPH_FILENAME, seed_dir.as_posix()))
+    print("入库不是 skill 包的版本发布（ADR-0009「维护即发布」说的是另一件事，一次包发布可以带零次或多次入库）："
+          "这一条只把文件放进工作树，接着走分支、commit、PR，第二双眼审的就是上面这段 diff（硬边界 2），"
+          "隐私钩子在 main 上守着（ADR-0014）。")
+    print("它是一次拷贝，不经图引擎：引擎那条「包内出厂种子谁都不许写」照旧管着会话里的每一次写图（ADR-0020），"
+          "入库没有绕过它，只是走的另一条路：一次要人审的 git 提交。")
     return 0
 
 
@@ -600,9 +781,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("home", help="回显活图目录的绝对路径；没有就从出厂种子拷一份，有就一个字不动")
     p.add_argument("--name", required=True, help="领域名，如 破产；它就是活图下的目录名")
+    p.add_argument("--empty", action="store_true",
+                   help="开发侧造新领域：活图与出厂种子都没有时，建目录并起一份空领域图；包里有种子即拒")
     p.add_argument("--live-root", default=None,
                    help="活图根，默认 ~/.loo0ng/领域（环境变量 %s 换「家」）" % LIVE_HOME_ENV)
     p.add_argument("--seed-root", default=None, help="出厂种子根，默认本 skill 的 assets/")
+    p.add_argument("--engine", default=None, help="图引擎 graph.py 的路径，默认取兄弟 skill loo0ng-graph 里的；只有 --empty 用它")
+
+    p = sub.add_parser("intake", help="入库：把活图那份 领域图.json 送进本仓库成为出厂种子；拷之前校验并回显 diff")
+    p.add_argument("--name", required=True, help="领域名；活图与种子两边的目录名")
+    p.add_argument("--live-root", default=None,
+                   help="活图根，默认 ~/.loo0ng/领域（环境变量 %s 换「家」）" % LIVE_HOME_ENV)
+    p.add_argument("--seed-root", default=None, help="出厂种子根，默认本 skill 的 assets/；须在一个 git 工作树里")
+    p.add_argument("--engine", default=None, help="图引擎 graph.py 的路径，默认取兄弟 skill loo0ng-graph 里的；拷之前用它校验")
 
     p = sub.add_parser("docx-text", help="把一份 docx 的正文打成纯文本（段落一行、表格一行一行）")
     p.add_argument("docx", help="指南或指引手册的 .docx")
@@ -618,6 +809,8 @@ def main(argv=None) -> int:
             return cmd_apply(args)
         if args.cmd == "home":
             return cmd_home(args)
+        if args.cmd == "intake":
+            return cmd_intake(args)
         if args.cmd == "docx-text":
             return cmd_docx_text(args)
         return cmd_from_case(args)
